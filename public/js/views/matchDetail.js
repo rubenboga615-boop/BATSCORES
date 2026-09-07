@@ -1,0 +1,275 @@
+/** Fiche detaillee d'une rencontre : resume, compositions, statistiques, confrontations. */
+import { api } from '../api.js';
+import {
+  esc, logo, kickoffTime, statusLabel, longDate, isoDay,
+  statRatio, statLabel, eventIcon, eventDetail, minuteLabel,
+} from '../utils.js';
+import { backLink, tabsBar, emptyState, errorState, skeletonList, matchRow } from '../components.js';
+import { store } from '../store.js';
+import { countryName } from '../i18n.js';
+
+const state = { id: null, data: null, tab: 'summary' };
+
+function header(fixture) {
+  const { phase } = fixture.status;
+  const played = phase === 'live' || phase === 'finished';
+  const score = played
+    ? `${fixture.goals.home ?? 0} - ${fixture.goals.away ?? 0}`
+    : kickoffTime(fixture.date);
+
+  let statusText;
+  if (phase === 'live') statusText = statusLabel(fixture.status);
+  else if (phase === 'finished') statusText = fixture.status.short === 'FT' ? 'Termine' : statusLabel(fixture.status);
+  else if (phase === 'cancelled') statusText = statusLabel(fixture.status);
+  else statusText = longDate(isoDay(new Date(fixture.date)));
+
+  const penalties = fixture.score?.penalty;
+  const penaltyLine = penalties?.home !== null && penalties?.home !== undefined
+    ? `<div class="mh__status">Tirs au but : ${penalties.home} - ${penalties.away}</div>`
+    : '';
+
+  const halftime = fixture.score?.halftime;
+  const halftimeLine = halftime?.home !== null && halftime?.home !== undefined
+    ? `<div class="mh__status">Mi-temps ${halftime.home} - ${halftime.away}</div>`
+    : '';
+
+  const starred = store.isFavoriteFixture(fixture.id);
+
+  return `
+    <div class="mh">
+      <div class="mh__league">
+        ${logo(fixture.league.logo, fixture.league.name)}
+        <a href="#/competition/${fixture.league.id}?season=${fixture.league.season || ''}">
+          ${esc(countryName(fixture.league.country))} · ${esc(fixture.league.name || '')}
+        </a>
+        ${fixture.league.round ? `<span style="color:var(--text-faint)">· ${esc(fixture.league.round)}</span>` : ''}
+      </div>
+      <div class="mh__main">
+        <div class="mh__team">
+          ${logo(fixture.home.logo, fixture.home.name)}
+          <a href="#/equipe/${fixture.home.id}">${esc(fixture.home.name)}</a>
+        </div>
+        <div class="mh__center">
+          <div class="mh__score ${phase === 'live' ? 'is-live' : ''}">${esc(score)}</div>
+          <div class="mh__status ${phase === 'live' ? 'is-live' : ''}">${esc(statusText)}</div>
+          ${penaltyLine}
+          ${halftimeLine}
+        </div>
+        <div class="mh__team">
+          ${logo(fixture.away.logo, fixture.away.name)}
+          <a href="#/equipe/${fixture.away.id}">${esc(fixture.away.name)}</a>
+        </div>
+      </div>
+      <div class="mh__meta">
+        ${fixture.venue ? `${esc(fixture.venue.name)}${fixture.venue.city ? `, ${esc(fixture.venue.city)}` : ''}` : ''}
+        ${fixture.referee ? ` · Arbitre : ${esc(fixture.referee)}` : ''}
+        <div style="margin-top:8px">
+          <button class="filter ${starred ? 'is-active' : ''}" data-star="${fixture.id}">
+            ${starred ? '★ Suivi' : '☆ Suivre ce match'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function summaryPanel({ fixture, events }) {
+  if (!events.length) {
+    return fixture.status.phase === 'scheduled'
+      ? emptyState('Match a venir', `Coup d'envoi a ${kickoffTime(fixture.date)}.`, '⏱️')
+      : emptyState('Aucun fait de match', 'Les evenements apparaitront au fil de la rencontre.', '⚽');
+  }
+  const rows = events.map((event) => {
+    const isHome = event.team?.id === fixture.home.id;
+    const assist = event.assist?.name
+      ? `<div class="event__detail">${event.type === 'subst' ? '↑ ' : 'Passe : '}${esc(event.assist.name)}</div>`
+      : '';
+    return `
+      <div class="event ${isHome ? 'event--home' : 'event--away'}">
+        <div class="event__minute">${esc(minuteLabel(event.time))}</div>
+        <div class="event__body">
+          <div class="event__player">
+            <span class="event__icon">${eventIcon(event)}</span>${esc(event.player?.name || event.team?.name || '')}
+          </div>
+          <div class="event__detail">${esc(eventDetail(event.detail))}${event.comments ? ` · ${esc(event.comments)}` : ''}</div>
+          ${assist}
+        </div>
+      </div>`;
+  }).join('');
+  return `<div class="card"><div class="card__title">Faits de match</div>${rows}</div>`;
+}
+
+function statisticsPanel({ statistics }) {
+  if (statistics.length < 2) {
+    return emptyState('Statistiques indisponibles', 'Elles sont publiees peu apres le coup d\'envoi.', '📊');
+  }
+  const [home, away] = statistics;
+  const awayByType = new Map((away.statistics || []).map((s) => [s.type, s.value]));
+
+  const rows = (home.statistics || []).map((stat) => {
+    const homeValue = stat.value ?? 0;
+    const awayValue = awayByType.get(stat.type) ?? 0;
+    const [hp, ap] = statRatio(homeValue, awayValue);
+    return `
+      <div class="stat">
+        <div class="stat__row">
+          <span class="stat__value">${esc(homeValue)}</span>
+          <span class="stat__label">${esc(statLabel(stat.type))}</span>
+          <span class="stat__value">${esc(awayValue)}</span>
+        </div>
+        <div class="stat__bar">
+          <i class="home" style="width:${hp.toFixed(1)}%"></i>
+          <i class="away" style="width:${ap.toFixed(1)}%"></i>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card__title">
+        ${esc(home.team?.name || '')} &nbsp;·&nbsp; ${esc(away.team?.name || '')}
+      </div>
+      ${rows}
+    </div>`;
+}
+
+function lineupColumn(lineup) {
+  if (!lineup) return '';
+  const players = (lineup.startXI || []).map((p) => p.player);
+  const bench = (lineup.substitutes || []).map((p) => p.player);
+  const row = (p) => `
+    <div class="player">
+      <span class="player__number">${esc(p.number ?? '')}</span>
+      <span class="player__name">${esc(p.name || '')}</span>
+      <span class="player__pos">${esc(p.pos || '')}</span>
+    </div>`;
+  return `
+    <div class="card">
+      <div class="lineup__head">
+        ${logo(lineup.team?.logo, lineup.team?.name)}
+        <span>${esc(lineup.team?.name || '')}</span>
+        <span class="lineup__formation">${esc(lineup.formation || '')}</span>
+      </div>
+      <div class="lineup__group">Titulaires</div>
+      ${players.map(row).join('')}
+      ${bench.length ? `<div class="lineup__group">Remplacants</div>${bench.map(row).join('')}` : ''}
+      ${lineup.coach?.name ? `<div class="lineup__group">Entraineur</div><div class="player"><span class="player__number"></span><span class="player__name">${esc(lineup.coach.name)}</span></div>` : ''}
+    </div>`;
+}
+
+function lineupsPanel({ lineups }) {
+  if (!lineups.length) {
+    return emptyState('Compositions non communiquees', 'Elles sont generalement publiees une heure avant le coup d\'envoi.', '👥');
+  }
+  return `<div class="lineups">${lineups.map(lineupColumn).join('')}</div>`;
+}
+
+function h2hPanel({ h2h, fixture }) {
+  if (!h2h.length) {
+    return emptyState('Aucune confrontation', 'Ces deux equipes ne se sont pas rencontrees recemment.', '🤝');
+  }
+  const past = h2h.filter((m) => m.id !== fixture.id);
+  let homeWins = 0; let draws = 0; let awayWins = 0;
+  for (const m of past) {
+    if (m.status.phase !== 'finished') continue;
+    const homeIsOurHome = m.home.id === fixture.home.id;
+    if (m.goals.home === m.goals.away) draws += 1;
+    else if ((m.goals.home > m.goals.away) === homeIsOurHome) homeWins += 1;
+    else awayWins += 1;
+  }
+  return `
+    <div class="card">
+      <div class="card__title">Bilan des confrontations</div>
+      <div class="stat">
+        <div class="stat__row">
+          <span class="stat__value">${homeWins}</span>
+          <span class="stat__label">${esc(fixture.home.name)} · nuls · ${esc(fixture.away.name)}</span>
+          <span class="stat__value">${awayWins}</span>
+        </div>
+        <div class="stat__bar">
+          <i class="home" style="width:${(homeWins / Math.max(past.length, 1)) * 100}%"></i>
+          <i style="background:var(--text-faint);width:${(draws / Math.max(past.length, 1)) * 100}%"></i>
+          <i class="away" style="width:${(awayWins / Math.max(past.length, 1)) * 100}%"></i>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card__title">Dernieres rencontres</div>
+      ${past.map(matchRow).join('')}
+    </div>`;
+}
+
+const PANELS = {
+  summary: summaryPanel,
+  lineups: lineupsPanel,
+  stats: statisticsPanel,
+  h2h: h2hPanel,
+};
+
+function renderPanel(root) {
+  const panel = root.querySelector('#match-panel');
+  if (!panel || !state.data) return;
+  panel.innerHTML = (PANELS[state.tab] || summaryPanel)(state.data);
+}
+
+export async function renderMatchDetail(root, { params }) {
+  const id = Number(params.id);
+  // L'onglet resume est le point d'entree naturel a chaque ouverture de fiche.
+  state.tab = 'summary';
+  state.id = id;
+
+  root.innerHTML = `${backLink('#/', 'Retour aux matchs')}${skeletonList(3)}`;
+
+  let data;
+  try {
+    data = await api.fixture(id);
+  } catch (err) {
+    root.innerHTML = `${backLink('#/', 'Retour aux matchs')}${errorState(err)}`;
+    return;
+  }
+  state.data = data;
+
+  const tabs = [
+    { id: 'summary', label: 'Resume' },
+    { id: 'stats', label: 'Statistiques' },
+    { id: 'lineups', label: 'Compositions' },
+    { id: 'h2h', label: 'Confrontations' },
+  ];
+
+  root.innerHTML = `
+    ${backLink('#/', 'Retour aux matchs')}
+    ${header(data.fixture)}
+    ${tabsBar(tabs, state.tab)}
+    <div id="match-panel"></div>`;
+  renderPanel(root);
+}
+
+export function bindMatchDetailEvents(root) {
+  root.addEventListener('click', (event) => {
+    const tab = event.target.closest('[data-tab]');
+    if (tab && root.querySelector('#match-panel')) {
+      state.tab = tab.dataset.tab;
+      root.querySelectorAll('[data-tab]').forEach((el) => {
+        el.classList.toggle('is-active', el.dataset.tab === state.tab);
+        el.setAttribute('aria-selected', String(el.dataset.tab === state.tab));
+      });
+      renderPanel(root);
+    }
+  });
+}
+
+export const matchDetailState = state;
+
+/** Recharge la fiche en direct sans changer d'onglet ni faire clignoter la page. */
+export async function refreshMatchDetail(root) {
+  if (!state.id || !state.data) return;
+  if (state.data.fixture.status.phase !== 'live') return;
+  try {
+    const fresh = await api.fixture(state.id);
+    state.data = fresh;
+    const headerEl = root.querySelector('.mh');
+    if (headerEl) headerEl.outerHTML = header(fresh.fixture);
+    renderPanel(root);
+  } catch {
+    /* echec silencieux : le prochain cycle reessaiera */
+  }
+}
