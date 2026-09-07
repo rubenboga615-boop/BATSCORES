@@ -43,7 +43,7 @@ Le serveur protege aussi votre quota :
 
 ## Installation
 
-Prerequis : Node.js 18 ou superieur.
+Prerequis : Node.js 20 ou superieur.
 
 ```bash
 git clone https://github.com/rubenboga615-boop/BATSCORES.git
@@ -103,6 +103,44 @@ Le frontend consomme ces routes ; elles sont aussi utilisables directement.
 | `GET /api/teams/:id` | Fiche equipe. |
 | `GET /api/search?q=` | Recherche equipes et competitions. |
 
+## Tests
+
+```bash
+npm test          # routes du backend et chemins d'erreur (runner integre de Node)
+npm run test:e2e  # interface, dans Chromium, en bureau et en mobile
+npm run test:all  # les deux
+```
+
+**Aucun test n'appelle le vrai API-Football.** Ils tournent contre un faux
+fournisseur (`test/mock-api.mjs`) qui reproduit la forme des reponses de l'API v3,
+y compris ses particularites : enveloppe `{ errors, response }`, tableau de tableaux
+pour les classements, possession exprimee en pourcentage textuel. Les tests sont donc
+deterministes, executables hors ligne, et ne consomment aucun quota.
+
+Couverture : 27 tests backend (groupement et ordre des competitions, phases de
+statut, agregation de la fiche de match, classement, buteurs, recherche, favoris,
+efficacite du cache, cle absente, cle refusee, panne du fournisseur) et 34 tests
+d'interface joues deux fois, en bureau et en mobile.
+
+Les tests navigateur ont besoin de Chromium :
+
+```bash
+npx playwright install chromium
+```
+
+Si vous disposez deja d'un Chromium sur la machine, `PW_CHROMIUM_PATH` permet de
+le reutiliser sans rien telecharger :
+
+```bash
+PW_CHROMIUM_PATH=/chemin/vers/chromium npm run test:e2e
+```
+
+### Integration continue
+
+`.github/workflows/ci.yml` rejoue tout cela a chaque poussee sur `main` et a chaque
+pull request : les tests backend sous Node 20 et 22, puis les tests d'interface.
+En cas d'echec, le rapport Playwright est conserve comme artefact pendant 7 jours.
+
 ## Deploiement
 
 L'application est un serveur Node classique, sans etape de build. Elle fonctionne sur
@@ -122,7 +160,8 @@ en consequence.
 
 ```
 server/
-  index.js         serveur Express, fichiers statiques, gestion d'erreurs
+  index.js         point d'entree : ecoute le port configure
+  app.js           construction de l'application Express (routes, statiques, erreurs)
   config.js        lecture de l'environnement, choix du fournisseur
   apiFootball.js   client amont : cache, deduplication, limiteur de debit
   cache.js         cache memoire TTL
@@ -141,6 +180,14 @@ public/
     utils.js       formatage des dates, scores, statuts
     views/         matchs, direct, fiche match, competitions, equipe, recherche, favoris
   sw.js            service worker (shell uniquement, jamais les scores)
+test/
+  mock-api.mjs     faux fournisseur API-Football
+  api.test.mjs     tests des routes du backend
+  errors.test.mjs  tests des chemins d'erreur, chacun dans un processus isole
+  stack.mjs        pile faux fournisseur + application, pour les tests navigateur
+  e2e/             tests d'interface Playwright
+.github/workflows/
+  ci.yml           integration continue
 ```
 
 ## Licence

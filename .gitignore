@@ -7,3 +7,8 @@ npm-debug.log*
 .cache/
 dist/
 coverage/
+
+# Sorties des tests navigateur
+test-results/
+playwright-report/
+blob-report/
