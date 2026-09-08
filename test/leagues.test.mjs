@@ -97,6 +97,35 @@ describe('choix des saisons', () => {
   });
 });
 
+describe('option collee a sa valeur', () => {
+  test('une espace manquante avant une option est nommee comme telle', () => {
+    // Cas reel : « --season 2016-2025--profile total » tape sans l'espace.
+    // Le message par defaut aurait parle d'une saison invalide — vrai, mais
+    // la faute est ailleurs, et elle est facile a faire sur un telephone.
+    assert.throws(
+      () => parseSeasons('2016-2025--profile'),
+      (err) => {
+        assert.match(err.message, /manque une espace/);
+        assert.match(err.message, /--profile/);
+        // Le message doit montrer la forme corrigee, pas seulement le probleme.
+        assert.match(err.message, /2016-2025 --profile/);
+        return true;
+      },
+    );
+  });
+
+  test('le meme piege est detecte sur les championnats', () => {
+    assert.throws(() => parseLeagues('top5--profile'), /manque une espace/);
+    assert.throws(() => parseLeagues('61,39--season'), /--season/);
+  });
+
+  test('un tiret ordinaire n\'est pas confondu avec une option', () => {
+    // Une plage de saisons contient un tiret : elle doit rester valide.
+    assert.deepEqual(parseSeasons('2019-2021'), [2019, 2020, 2021]);
+    assert.deepEqual(parseLeagues('top5'), parseLeagues('top5'));
+  });
+});
+
 describe('cibles a collecter', () => {
   test('chaque championnat est croise avec chaque saison', () => {
     const targets = targetsOf([61, 39], [2023, 2024]);

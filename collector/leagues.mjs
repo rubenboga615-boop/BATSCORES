@@ -60,6 +60,24 @@ export const KNOWN = [...new Map(
 export const leagueName = (id) => KNOWN.find((l) => l.id === Number(id))?.name || `competition ${id}`;
 
 /**
+ * Detecte une option collee a sa valeur.
+ *
+ * « --season 2016-2025--profile total » : l'espace manquante fait que tout
+ * arrive dans un seul argument. Le message par defaut parlerait d'une saison
+ * invalide, ce qui est vrai mais n'aide pas — la faute est ailleurs, et elle
+ * est facile a faire en tapant une longue commande sur un telephone.
+ */
+function gluedOption(raw) {
+  const match = /(.*?)(--[a-z-]+)/i.exec(raw);
+  if (!match) return;
+  const [, valeur, option] = match;
+  throw new Error(
+    `Il manque une espace avant "${option}". Vous avez ecrit "${raw}",`
+    + ` il faut ecrire "${valeur.trim()} ${option} ..."`,
+  );
+}
+
+/**
  * Interprete une selection de championnats.
  *
  * Accepte un nom d'ensemble ("top5"), une liste d'identifiants ("61,39,140"),
@@ -70,6 +88,7 @@ export const leagueName = (id) => KNOWN.find((l) => l.id === Number(id))?.name |
 export function parseLeagues(input) {
   const raw = String(input ?? '').trim();
   if (!raw) return [];
+  gluedOption(raw);
 
   const ids = [];
   for (const part of raw.split(/[,\s]+/).filter(Boolean)) {
@@ -103,6 +122,7 @@ export function parseLeagues(input) {
 export function parseSeasons(input) {
   const raw = String(input ?? '').trim();
   if (!raw) return [];
+  gluedOption(raw);
 
   const years = [];
   for (const part of raw.split(/[,\s]+/).filter(Boolean)) {
