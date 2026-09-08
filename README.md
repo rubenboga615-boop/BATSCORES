@@ -225,6 +225,7 @@ public/
   sw.js            service worker (shell uniquement, jamais les scores)
 collector/
   schema.sql       28 tables : archive brute, file de travail, donnees normalisees
+  lock.mjs         verrou partage : une seule collecte a la fois
   db.mjs           acces SQLite, file de taches, comptabilite du quota
   client.mjs       client API : limitation de debit, reprises, archivage brut
   plan.mjs         profils de collecte et estimation du cout

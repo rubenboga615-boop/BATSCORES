@@ -13,6 +13,7 @@ import { Client } from './client.mjs';
 import { estimate, scopeOf, PROFILES } from './plan.mjs';
 import { runCollector } from './worker.mjs';
 import { deriveAll } from './derive.mjs';
+import { acquireLock, AlreadyRunning } from './lock.mjs';
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
@@ -121,6 +122,19 @@ async function main() {
       process.exit(1);
     }
 
+    // Verrou partage avec la page Collecte : une seule collecte a la fois,
+    // sinon le quota serait consomme deux fois sur la meme base.
+    let release;
+    try {
+      release = acquireLock(opts.db || DEFAULT_DB_PATH);
+    } catch (err) {
+      if (err instanceof AlreadyRunning) {
+        console.error(`\nErreur : ${err.message}\n`);
+        process.exit(1);
+      }
+      throw err;
+    }
+
     const client = new Client({
       db,
       apiKey,
@@ -147,6 +161,7 @@ async function main() {
     console.log('\nDerivation des tables normalisees...');
     deriveAll(db, { log });
     console.log('');
+    release();
     return undefined;
   }
 

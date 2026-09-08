@@ -53,7 +53,12 @@ async function loadCollector() {
   return { ok: true, db, plan };
 }
 
-/** Le processus enregistre est-il encore vivant ? */
+/**
+ * Le processus enregistre est-il encore vivant ?
+ *
+ * Le meme fichier verrou est pris par la ligne de commande : une collecte
+ * lancee au terminal est donc vue ici, et le bouton "Lancer" la refusera.
+ */
 function runningPid() {
   try {
     const pid = Number(fs.readFileSync(PID_FILE, 'utf8').trim());

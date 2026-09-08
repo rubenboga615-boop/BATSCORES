@@ -80,6 +80,16 @@ Le jeton se saisit une fois dans la page, puis reste dans le navigateur.
 Une collecte lancee depuis la page tourne en arriere-plan : elle continue si
 vous fermez l'onglet, et meme si le serveur web redemarre.
 
+### Une seule collecte a la fois
+
+Ligne de commande et page Collecte partagent un verrou, un simple fichier PID
+a cote de la base. Lancer une seconde collecte pendant qu'une premiere tourne
+est refuse des deux cotes : sans cela le quota serait consomme deux fois, et
+deux processus pourraient prendre la meme tache.
+
+Un verrou laisse par un processus disparu (machine redemarree en pleine
+collecte) est ignore automatiquement.
+
 ## Profils
 
 Le cout est domine par les appels **par rencontre** : chaque endpoint ajoute
