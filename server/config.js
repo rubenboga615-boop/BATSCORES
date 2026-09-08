@@ -29,4 +29,13 @@ export const config = {
   rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE) || 280,
 };
 
-export const hasApiKey = () => config.apiKey.length > 0;
+/**
+ * Valeurs d'exemple du fichier .env.example. Les laisser telles quelles est
+ * l'erreur de configuration la plus frequente : la cle est presente, donc
+ * envoyee, et le fournisseur repond un refus difficile a interpreter.
+ */
+const PLACEHOLDERS = new Set(['votre_cle_api_ici', 'your_api_key_here', 'votre_cle', 'changeme']);
+
+export const isPlaceholderKey = () => PLACEHOLDERS.has(config.apiKey.toLowerCase());
+
+export const hasApiKey = () => config.apiKey.length > 0 && !isPlaceholderKey();

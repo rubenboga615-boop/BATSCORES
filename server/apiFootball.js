@@ -1,4 +1,4 @@
-import { config, hasApiKey } from './config.js';
+import { config, hasApiKey, isPlaceholderKey } from './config.js';
 import { cache } from './cache.js';
 
 /**
@@ -62,7 +62,9 @@ const inFlight = new Map();
 export async function apiGet(path, params = {}, ttlMs = 60_000) {
   if (!hasApiKey()) {
     throw new ApiError(
-      "Cle API absente. Renseignez API_FOOTBALL_KEY dans le fichier .env",
+      isPlaceholderKey()
+        ? `API_FOOTBALL_KEY vaut encore la valeur d'exemple ("${config.apiKey}"). Remplacez-la par votre vraie cle dans le fichier .env, puis relancez le serveur.`
+        : "Cle API absente. Renseignez API_FOOTBALL_KEY dans le fichier .env",
       503,
     );
   }

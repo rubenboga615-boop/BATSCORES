@@ -34,6 +34,40 @@ describe('cle API absente', () => {
   });
 });
 
+describe('cle laissee a la valeur d\'exemple', () => {
+  test('est traitee comme absente, avec un message qui nomme le probleme', async () => {
+    // Erreur de configuration la plus frequente : la cle d'exemple est
+    // presente, donc envoyee, et le fournisseur repond un refus opaque.
+    // L'application doit la reconnaitre avant tout appel reseau.
+    const app = await spawnServer({ API_FOOTBALL_KEY: 'votre_cle_api_ici' });
+    try {
+      const { status, body } = await app.get('/api/fixtures');
+      assert.equal(status, 503);
+      assert.match(body.error, /valeur d'exemple/);
+
+      const health = await app.get('/api/health');
+      assert.equal(health.body.status, 'missing-api-key');
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('une vraie cle n\'est pas confondue avec un exemple', async () => {
+    const mock = await startMockApi();
+    const app = await spawnServer({
+      API_FOOTBALL_KEY: '975d27a5db7ebe112b76d3165947b076'.replace(/./g, 'a'),
+      API_FOOTBALL_BASE_URL: mock.url,
+    });
+    try {
+      const { status } = await app.get('/api/fixtures');
+      assert.equal(status, 200);
+    } finally {
+      await app.close();
+      await mock.close();
+    }
+  });
+});
+
 describe('cle API refusee par le fournisseur', () => {
   test('une erreur de jeton remonte en 401, pas en 502', async () => {
     // Serveur qui repond comme le vrai fournisseur face a une cle invalide :
