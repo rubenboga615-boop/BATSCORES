@@ -296,17 +296,170 @@ function pitch(lineup, flip = false) {
     </div>`;
 }
 
+/* -------------------------------- Pronostic -------------------------------- */
+
+/** Barre 1N2 : trois segments proportionnels, lisibles d'un coup d'oeil. */
+function outcomeBar(outcome, fixture) {
+  return `
+    <div class="stat">
+      <div class="stat__row">
+        <span class="stat__value">${outcome.home} %</span>
+        <span class="stat__label">victoire · nul · victoire</span>
+        <span class="stat__value">${outcome.away} %</span>
+      </div>
+      <div class="stat__bar">
+        <i class="home" style="width:${outcome.home}%"></i>
+        <i style="background:var(--text-faint);width:${outcome.draw}%"></i>
+        <i class="away" style="width:${outcome.away}%"></i>
+      </div>
+      <div class="stat__row" style="margin-top:6px;margin-bottom:0">
+        <span class="stat__label">${esc(fixture.home.name)}</span>
+        <span class="stat__label">nul ${outcome.draw} %</span>
+        <span class="stat__label">${esc(fixture.away.name)}</span>
+      </div>
+    </div>`;
+}
+
+function ownPrediction(own, fixture) {
+  const kv = (rows) => `<div class="kv">${rows.map(([k, v]) => `
+    <div class="kv__row"><span class="kv__k">${esc(k)}</span><span class="kv__v">${esc(v)}</span></div>`).join('')}</div>`;
+
+  return `
+    <div class="card">
+      <div class="card__title">Notre modele · entraine sur vos donnees</div>
+      ${outcomeBar(own.outcome, fixture)}
+      <div class="stat">
+        <div class="stat__row">
+          <span class="stat__value">${own.expected.home}</span>
+          <span class="stat__label">buts attendus</span>
+          <span class="stat__value">${own.expected.away}</span>
+        </div>
+      </div>
+      ${kv([
+    ['Plus de 2,5 buts', `${own.goals.over25} %`],
+    ['Les deux equipes marquent', `${own.goals.btts} %`],
+    ['Total de buts attendu', own.goals.expectedTotal],
+    ['Confiance', `${own.confidence} %`],
+    ['Volatilite', own.volatility],
+  ])}
+    </div>
+
+    <div class="card">
+      <div class="card__title">Scores les plus probables</div>
+      <div class="chips">
+        ${own.topScores.map((s, i) => `
+          <span class="chip"${i === 0 ? ' style="border-color:var(--accent)"' : ''}>
+            <strong>${esc(s.score)}</strong> · ${s.p} %
+          </span>`).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__title">Sur quoi il s'appuie</div>
+      ${kv([
+    ['Rencontres analysees', own.basis.matches],
+    ['Saisons prises en compte', own.seasons.join(', ')],
+    [`Attaque · ${fixture.home.name}`, own.basis.attackHome],
+    [`Defense · ${fixture.home.name}`, own.basis.defenceHome],
+    [`Attaque · ${fixture.away.name}`, own.basis.attackAway],
+    [`Defense · ${fixture.away.name}`, own.basis.defenceAway],
+  ])}
+      <div class="stat">
+        <div class="stat__label">
+          Une force superieure a 1 signifie mieux que la moyenne du championnat.
+          Echantillon ${esc(own.quality.level)} : ${esc(own.quality.message)}
+        </div>
+      </div>
+    </div>`;
+}
+
+function providerPrediction(provider) {
+  const pct = provider.percent || {};
+  const cmp = provider.comparison || {};
+  const rows = Object.entries(cmp).map(([key, v]) => {
+    const labels = { form: 'Forme', att: 'Attaque', def: 'Defense', total: 'Total',
+      poisson_distribution: 'Distribution', h2h: 'Confrontations', goals: 'Buts' };
+    return `
+      <div class="stat">
+        <div class="stat__row">
+          <span class="stat__value">${esc(v.home ?? '—')}</span>
+          <span class="stat__label">${esc(labels[key] || key)}</span>
+          <span class="stat__value">${esc(v.away ?? '—')}</span>
+        </div>
+        <div class="stat__bar">
+          <i class="home" style="width:${parseFloat(v.home) || 50}%"></i>
+          <i class="away" style="width:${parseFloat(v.away) || 50}%"></i>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card__title">Pronostic du fournisseur</div>
+      <div class="stat">
+        <div class="stat__row">
+          <span class="stat__value">${esc(pct.home ?? '—')}</span>
+          <span class="stat__label">victoire · nul · victoire</span>
+          <span class="stat__value">${esc(pct.away ?? '—')}</span>
+        </div>
+        <div class="stat__bar">
+          <i class="home" style="width:${parseFloat(pct.home) || 0}%"></i>
+          <i style="background:var(--text-faint);width:${parseFloat(pct.draw) || 0}%"></i>
+          <i class="away" style="width:${parseFloat(pct.away) || 0}%"></i>
+        </div>
+      </div>
+      ${provider.advice ? `
+        <div class="stat"><div class="stat__label">Conseil : ${esc(provider.advice)}</div></div>` : ''}
+      ${rows}
+    </div>`;
+}
+
+function predictionPanel({ prediction, fixture }) {
+  if (!prediction) return skeletonList(3);
+
+  const blocks = [];
+  if (prediction.own) blocks.push(ownPrediction(prediction.own, fixture));
+  if (prediction.provider) blocks.push(providerPrediction(prediction.provider));
+
+  if (!blocks.length) {
+    return emptyState(
+      'Pronostic indisponible',
+      prediction.diagnostic || "Aucune source de pronostic pour cette rencontre.",
+      '🔮',
+    );
+  }
+
+  // Le diagnostic explique ce qui manque quand une seule source a repondu.
+  const note = prediction.diagnostic
+    ? `<div class="card"><div class="stat"><div class="stat__label">${esc(prediction.diagnostic)}</div></div></div>`
+    : '';
+
+  return blocks.join('') + note;
+}
+
 const PANELS = {
   summary: summaryPanel,
   players: playersPanel,
+  prediction: predictionPanel,
   lineups: lineupsPanel,
   stats: statisticsPanel,
   h2h: h2hPanel,
 };
 
-function renderPanel(root) {
+async function renderPanel(root) {
   const panel = root.querySelector('#match-panel');
   if (!panel || !state.data) return;
+
+  if (state.tab === 'prediction' && !state.data.prediction) {
+    panel.innerHTML = skeletonList(3);
+    try {
+      const response = await fetch(`/api/predict/${state.id}`);
+      state.data.prediction = await response.json();
+    } catch (err) {
+      panel.innerHTML = errorState(err);
+      return;
+    }
+  }
   panel.innerHTML = (PANELS[state.tab] || summaryPanel)(state.data);
 }
 
@@ -329,6 +482,7 @@ export async function renderMatchDetail(root, { params }) {
 
   const tabs = [
     { id: 'summary', label: 'Resume' },
+    { id: 'prediction', label: 'Pronostic' },
     { id: 'players', label: 'Joueurs' },
     { id: 'stats', label: 'Statistiques' },
     { id: 'lineups', label: 'Compositions' },

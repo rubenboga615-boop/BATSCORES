@@ -56,6 +56,34 @@ try {
   db.prepare(`INSERT INTO runs (started_at, finished_at, scope, profile, calls, tasks_done, tasks_failed, stop_reason)
               VALUES (?, ?, ?, 'essentiel', 12, 5, 1, 'termine')`)
     .run(new Date().toISOString(), new Date().toISOString(), scope);
+
+  // Historique d'entrainement pour le modele de prediction. Sans un volume
+  // suffisant le modele refuse de repondre, a juste titre — mais l'onglet
+  // Pronostic ne serait alors jamais eprouve.
+  const teams = [85, 81, 80, 91, 84, 96];
+  const force = { 85: 2.2, 81: 1.5, 80: 1.3, 91: 1.2, 84: 0.9, 96: 0.6 };
+  const insert = db.prepare(`INSERT INTO fixtures
+    (id, date, timestamp, status_short, league_id, season, home_team_id, away_team_id, goals_home, goals_away)
+    VALUES (?, ?, ?, 'FT', 61, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`);
+  const nowSec = Math.floor(Date.now() / 1000);
+  let fid = 500000;
+  db.exec('BEGIN');
+  [2021, 2022, 2023, 2024, 2025].forEach((season, si) => {
+    let ts = nowSec - (5 - si) * 365 * 86400;
+    for (let round = 0; round < 6; round += 1) {
+      for (const h of teams) {
+        for (const a of teams) {
+          if (h === a) continue;
+          fid += 1;
+          ts += Math.floor((365 * 86400) / 180);
+          const gh = Math.max(0, Math.round(force[h] * 1.15 + (fid % 3) - 1));
+          const ga = Math.max(0, Math.round(force[a] * 0.85 + (fid % 2) - 0.5));
+          insert.run(fid, new Date(ts * 1000).toISOString(), ts, season, h, a, gh, ga);
+        }
+      }
+    }
+  });
+  db.exec('COMMIT');
   db.close();
 } catch {
   // Node 20 : la page affichera "collecteur indisponible", ce qui est teste.

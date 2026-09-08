@@ -188,6 +188,36 @@ SELECT season, coverage FROM league_seasons WHERE league_id = 61 ORDER BY season
 Une saison sans couverture pour un endpoint donne produit des taches en echec,
 sans interrompre le reste de la collecte. `npm run collect -- status` les compte.
 
+## Modele de prediction
+
+`collector/predict.mjs` entraine un modele de Poisson bivarie corrige facon
+Dixon-Coles sur les rencontres deja collectees. Il ne consomme aucun appel API.
+
+Pour chaque equipe, il estime une force d'attaque et une force de defense
+relatives a la moyenne du championnat, separement a domicile et a l'exterieur.
+Le produit de ces forces donne un nombre de buts attendu de chaque cote, dont
+on tire la probabilite de chaque score exact. Le 1N2, le plus/moins de 2,5 buts
+et le « les deux equipes marquent » se lisent dans cette matrice.
+
+Deux raffinements comptent :
+
+- **Ponderation temporelle.** Un match plus ancien pese moins, avec une
+  demi-vie d'environ un an. L'anciennete se mesure **par rapport au match le
+  plus recent de l'echantillon**, pas par rapport a l'horloge : sinon une base
+  de quelques annees voit tous ses poids devenir infinitesimaux, le rappel vers
+  la moyenne l'emporte, et le modele rend toutes les equipes identiques — un
+  effondrement silencieux, bien pire qu'un refus de repondre.
+- **Correction de Dixon-Coles.** Le Poisson simple sous-estime les scores nuls
+  et 1-1 et surestime 1-0 et 0-1 ; le facteur tau corrige ces quatre cases, qui
+  sont justement les plus frequentes.
+
+Le modele refuse de repondre sous quarante rencontres, et signale la qualite de
+l'echantillon au-dela. Il expose aussi les forces qu'il a estimees : on peut
+donc voir **pourquoi** il penche d'un cote.
+
+La confiance est l'ecart de la distribution 1N2 a l'incertitude maximale : un
+match indecis donne mecaniquement une confiance basse, ce qui est honnete.
+
 ## Tests
 
 Le collecteur est teste contre un faux fournisseur qui simule une saison

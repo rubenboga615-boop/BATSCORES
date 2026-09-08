@@ -73,6 +73,20 @@ export const SCHEDULED = baseFixture(1003, {
   score: { halftime: { home: null, away: null }, fulltime: { home: null, away: null } },
 });
 
+/**
+ * Rencontre a venir dans le championnat collecte : c'est le seul cas ou les
+ * deux sources de pronostic peuvent repondre en meme temps.
+ */
+export const UPCOMING = baseFixture(1005, {
+  fixture: { status: { long: 'Not Started', short: 'NS', elapsed: null, extra: null } },
+  goals: { home: null, away: null },
+  score: { halftime: { home: null, away: null }, fulltime: { home: null, away: null } },
+  teams: {
+    home: { id: 85, name: 'Paris Saint Germain', logo: 'https://media.example/psg.png', winner: null },
+    away: { id: 81, name: 'Marseille', logo: 'https://media.example/om.png', winner: null },
+  },
+});
+
 /** Rencontre reportee : verifie le traitement des statuts d'annulation. */
 export const POSTPONED = baseFixture(1004, {
   fixture: { status: { long: 'Match Postponed', short: 'PST', elapsed: null, extra: null } },
@@ -119,10 +133,17 @@ const standingRow = (rank, id, name, points, description) => {
 const ENDPOINTS = {
   '/fixtures': (params) => {
     if (params.get('live') === 'all') return [LIVE];
-    if (params.get('id')) return [baseFixture(Number(params.get('id')))];
+    if (params.get('id')) {
+      // Une recherche par identifiant doit rendre la rencontre telle qu'elle
+      // apparait dans la liste, statut compris — sinon un match annonce a
+      // venir revenait termine.
+      const id = Number(params.get('id'));
+      const known = [FINISHED, LIVE, SCHEDULED, POSTPONED, UPCOMING].find((f) => f.fixture.id === id);
+      return [known || baseFixture(id)];
+    }
     if (params.get('team')) return [baseFixture(2001), baseFixture(2002)];
     if (params.get('league')) return [baseFixture(3001), baseFixture(3002)];
-    return [FINISHED, LIVE, SCHEDULED, POSTPONED];
+    return [FINISHED, LIVE, SCHEDULED, POSTPONED, UPCOMING];
   },
 
   '/fixtures/events': () => ([
@@ -360,6 +381,23 @@ const ENDPOINTS = {
       { date: '2023-08-15', type: '50M', teams: { in: { id: 85, name: 'Paris Saint Germain', logo: null }, out: { id: 529, name: 'Barcelona', logo: null } } },
       { date: '2017-08-25', type: '105M', teams: { in: { id: 529, name: 'Barcelona', logo: null }, out: { id: 165, name: 'Borussia Dortmund', logo: null } } },
     ],
+  }]),
+
+  '/predictions': () => ([{
+    predictions: {
+      winner: { id: 85, name: 'Paris Saint Germain', comment: 'Win or draw' },
+      win_or_draw: true,
+      under_over: '-3.5',
+      goals: { home: '-2.5', away: '-1.5' },
+      advice: 'Combo Double chance : Paris Saint Germain ou nul et -3.5 buts',
+      percent: { home: '62%', draw: '22%', away: '16%' },
+    },
+    comparison: {
+      form: { home: '61%', away: '39%' },
+      att: { home: '58%', away: '42%' },
+      def: { home: '55%', away: '45%' },
+      total: { home: '59%', away: '41%' },
+    },
   }]),
 
   '/trophies': () => ([

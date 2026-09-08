@@ -46,11 +46,12 @@ test.describe('liste des matchs', () => {
     await page.click('[data-filter="finished"]');
     await expect(page.locator('.match')).toHaveCount(1);
 
+    // Deux rencontres a venir : une en Espagne, une en Ligue 1.
     await page.click('[data-filter="scheduled"]');
-    await expect(page.locator('.match')).toHaveCount(1);
+    await expect(page.locator('.match')).toHaveCount(2);
 
     await page.click('[data-filter="all"]');
-    await expect(page.locator('.match')).toHaveCount(4);
+    await expect(page.locator('.match')).toHaveCount(5);
   });
 
   test('une competition peut etre repliee et depliee', async ({ page }) => {

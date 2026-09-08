@@ -121,7 +121,7 @@ describe('cle API refusee par le fournisseur', () => {
     try {
       const { status, body } = await app.get('/api/fixtures');
       assert.equal(status, 200);
-      assert.equal(body.counts.total, 4);
+      assert.equal(body.counts.total, 5);
     } finally {
       await app.close();
       await mock.close();

@@ -23,6 +23,8 @@ historique interrogeable a partir de la meme cle API : voir
   quinze minutes, formations utilisees, penaltys), prochaines rencontres et resultats.
 - **Fiche joueur** : identite, statistiques de saison detaillees, transferts, palmares,
   blessures et suspensions.
+- **Pronostic** : le moteur du fournisseur et notre propre modele, entraine sur les
+  donnees collectees, avec les forces estimees et la confiance.
 - **Notes des joueurs** par rencontre, et composition dessinee sur un terrain.
 - **Quatre classements individuels** : buteurs, passeurs, cartons jaunes, cartons rouges.
 - **Classement general, a domicile et a l'exterieur**, rang et points recalcules.

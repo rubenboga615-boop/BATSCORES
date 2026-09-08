@@ -37,7 +37,9 @@ describe('rencontres du jour', () => {
   test('les rencontres sont groupees par competition', async () => {
     const { status, body } = await stack.get('/api/fixtures');
     assert.equal(status, 200);
-    assert.equal(body.counts.total, 4);
+    // Cinq rencontres reparties sur quatre competitions : deux matchs de
+    // Ligue 1, dont un a venir, tombent dans le meme groupe.
+    assert.equal(body.counts.total, 5);
     assert.equal(body.counts.live, 1);
     assert.equal(body.counts.finished, 1);
     assert.equal(body.groups.length, 4);
