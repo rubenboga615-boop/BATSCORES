@@ -102,7 +102,17 @@ export async function apiGet(path, params = {}, ttlMs = 60_000) {
       throw new ApiError('Quota API depasse. Reessayez dans un instant.', 429);
     }
     if (response.status === 401 || response.status === 403) {
-      throw new ApiError("Cle API refusee par le fournisseur. Verifiez API_FOOTBALL_KEY et API_FOOTBALL_PROVIDER.", 401);
+      // Le fournisseur explique souvent pourquoi dans le corps de la reponse
+      // (abonnement expire, cle inconnue, mauvais hote). Sans cette raison, on
+      // ne peut pas distinguer une cle revoquee d'un mauvais fournisseur.
+      const detail = await response.text().then(
+        (text) => text.slice(0, 300).replace(/\s+/g, ' ').trim(),
+        () => '',
+      );
+      throw new ApiError(
+        `Cle API refusee par le fournisseur (HTTP ${response.status}). Verifiez API_FOOTBALL_KEY et API_FOOTBALL_PROVIDER.${detail ? ` Reponse : ${detail}` : ''}`,
+        401,
+      );
     }
     if (!response.ok) {
       throw new ApiError(`Erreur fournisseur (HTTP ${response.status}).`, 502);
