@@ -352,13 +352,18 @@ function derivePredictionsAndOdds(db) {
     preds.push([params.fixture, JSON.stringify(response[0])]);
   }
   const oddsRows = [];
-  for (const { response } of iterateRaw(db, '/odds')) {
+  const snapshots = [];
+  for (const { response, fetchedAt } of iterateRaw(db, '/odds')) {
     for (const item of response) {
       const fixtureId = item?.fixture?.id;
       if (!fixtureId) continue;
       for (const bookmaker of item.bookmakers || []) {
         for (const bet of bookmaker.bets || []) {
-          oddsRows.push([fixtureId, bookmaker.id, bet.id, JSON.stringify(bet.values ?? [])]);
+          const values = JSON.stringify(bet.values ?? []);
+          oddsRows.push([fixtureId, bookmaker.id, bet.id, values]);
+          // Le releve garde la date de la reponse, pas celle de la derivation :
+          // rejouer la derivation ne cree donc pas de faux points dans la serie.
+          if (fetchedAt) snapshots.push([fixtureId, bookmaker.id, bet.id, fetchedAt, values]);
         }
       }
     }
@@ -367,7 +372,11 @@ function derivePredictionsAndOdds(db) {
     ON CONFLICT (fixture_id) DO UPDATE SET payload=excluded.payload`, preds)
     + bulk(db, `INSERT INTO odds (fixture_id, bookmaker_id, bet_id, bet_values)
       VALUES (?, ?, ?, ?)
-      ON CONFLICT (fixture_id, bookmaker_id, bet_id) DO UPDATE SET bet_values=excluded.bet_values`, oddsRows);
+      ON CONFLICT (fixture_id, bookmaker_id, bet_id) DO UPDATE SET bet_values=excluded.bet_values`, oddsRows)
+    + bulk(db, `INSERT INTO odds_snapshots (fixture_id, bookmaker_id, bet_id, captured_at, bet_values)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (fixture_id, bookmaker_id, bet_id, captured_at)
+      DO UPDATE SET bet_values=excluded.bet_values`, snapshots);
 }
 
 /* ------------------------------- Classements ------------------------------ */

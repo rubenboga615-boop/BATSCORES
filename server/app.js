@@ -10,6 +10,8 @@ import { miscRouter } from './routes/misc.js';
 import { collectorRouter } from './routes/collector.js';
 import { playersRouter } from './routes/players.js';
 import { predictRouter } from './routes/predict.js';
+import { oddsRouter } from './routes/odds.js';
+import { compareRouter } from './routes/compare.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'public');
@@ -29,6 +31,8 @@ export function createApp() {
   app.use('/api/teams', teamsRouter);
   app.use('/api/players', playersRouter);
   app.use('/api/predict', predictRouter);
+  app.use('/api/odds', oddsRouter);
+  app.use('/api/compare', compareRouter);
   app.use('/api/collector', collectorRouter);
   app.use('/api', miscRouter);
 

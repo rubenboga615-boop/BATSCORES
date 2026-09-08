@@ -83,7 +83,7 @@ describe('fiche de rencontre', () => {
     const { status, body } = await stack.get('/api/fixtures/1001');
     assert.equal(status, 200);
     assert.equal(body.fixture.id, 1001);
-    assert.equal(body.events.length, 3);
+    assert.equal(body.events.length, 6);
     assert.equal(body.lineups.length, 2);
     assert.equal(body.statistics.length, 2);
     assert.equal(body.h2h.length, 2);

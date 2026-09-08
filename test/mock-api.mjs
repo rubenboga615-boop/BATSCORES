@@ -139,13 +139,24 @@ const ENDPOINTS = {
       // venir revenait termine.
       const id = Number(params.get('id'));
       const known = [FINISHED, LIVE, SCHEDULED, POSTPONED, UPCOMING].find((f) => f.fixture.id === id);
-      return [known || baseFixture(id)];
+      if (known) return [known];
+      // Au-dela de la plage des rencontres du mock, l'API reelle renvoie une
+      // reponse vide plutot qu'une rencontre inventee. Le faux fournisseur
+      // doit se taire de la meme facon, sinon le 404 du backend ne serait
+      // jamais eprouve.
+      return id > 9999 ? [] : [baseFixture(id)];
     }
     if (params.get('team')) return [baseFixture(2001), baseFixture(2002)];
     if (params.get('league')) return [baseFixture(3001), baseFixture(3002)];
     return [FINISHED, LIVE, SCHEDULED, POSTPONED, UPCOMING];
   },
 
+  /**
+   * Faits de match coherents avec le score : trois buts locaux, un exterieur,
+   * mi-temps a 1-0. Une liste d'evenements qui ne raconte pas le meme match
+   * que le tableau d'affichage laisserait passer n'importe quelle erreur de
+   * lecture — la courbe de momentum, en particulier, s'en nourrit.
+   */
   '/fixtures/events': () => ([
     {
       time: { elapsed: 23, extra: null },
@@ -155,11 +166,32 @@ const ENDPOINTS = {
       type: 'Goal', detail: 'Normal Goal', comments: null,
     },
     {
+      time: { elapsed: 52, extra: null },
+      team: { id: 81, name: 'Marseille' },
+      player: { id: 6, name: 'Pierre-Emerick Aubameyang' },
+      assist: { id: null, name: null },
+      type: 'Goal', detail: 'Normal Goal', comments: null,
+    },
+    {
       time: { elapsed: 55, extra: null },
       team: { id: 81, name: 'Marseille' },
       player: { id: 3, name: 'Leonardo Balerdi' },
       assist: { id: null, name: null },
       type: 'Card', detail: 'Yellow Card', comments: 'Foul',
+    },
+    {
+      time: { elapsed: 63, extra: null },
+      team: { id: 85, name: 'Paris Saint Germain' },
+      player: { id: 7, name: 'Randal Kolo Muani' },
+      assist: { id: null, name: null },
+      type: 'Goal', detail: 'Penalty', comments: null,
+    },
+    {
+      time: { elapsed: 78, extra: null },
+      team: { id: 85, name: 'Paris Saint Germain' },
+      player: { id: 4, name: 'Bradley Barcola' },
+      assist: { id: 2, name: 'Vitinha' },
+      type: 'Goal', detail: 'Normal Goal', comments: null,
     },
     {
       time: { elapsed: 90, extra: 3 },
@@ -289,61 +321,76 @@ const ENDPOINTS = {
     }],
   }]),
 
-  '/teams/statistics': (p) => ({
-    league: { id: Number(p.get('league')), name: 'Ligue 1', country: 'France', season: Number(p.get('season')) },
-    team: { id: Number(p.get('team')), name: 'Paris Saint Germain', logo: null },
-    form: 'WWDLWWWDLW',
-    fixtures: {
-      played: { home: 17, away: 17, total: 34 },
-      wins: { home: 14, away: 8, total: 22 },
-      draws: { home: 2, away: 5, total: 7 },
-      loses: { home: 1, away: 4, total: 5 },
-    },
-    goals: {
-      for: {
-        total: { home: 45, away: 36, total: 81 },
-        average: { home: '2.6', away: '2.1', total: '2.4' },
-        minute: {
-          '0-15': { total: 9, percentage: '11.11%' },
-          '16-30': { total: 12, percentage: '14.81%' },
-          '31-45': { total: 15, percentage: '18.52%' },
-          '46-60': { total: 14, percentage: '17.28%' },
-          '61-75': { total: 13, percentage: '16.05%' },
-          '76-90': { total: 18, percentage: '22.22%' },
+  /**
+   * Le bilan de saison varie avec l'equipe demandee. Un mock qui renvoie les
+   * memes chiffres pour tout le monde laisserait passer un comparateur qui
+   * confond ses deux colonnes : ici, chaque camp a un profil distinct.
+   */
+  '/teams/statistics': (p) => {
+    const team = Number(p.get('team'));
+    const strong = team === 85; // le PSG du mock domine, les autres suivent
+    const shift = strong ? 0 : 6;
+    const minute = (base) => ({
+      '0-15': { total: base[0], percentage: '11.11%' },
+      '16-30': { total: base[1], percentage: '14.81%' },
+      '31-45': { total: base[2], percentage: '18.52%' },
+      '46-60': { total: base[3], percentage: '17.28%' },
+      '61-75': { total: base[4], percentage: '16.05%' },
+      '76-90': { total: base[5], percentage: '22.22%' },
+    });
+    return {
+      league: { id: Number(p.get('league')), name: 'Ligue 1', country: 'France', season: Number(p.get('season')) },
+      team: {
+        id: team,
+        name: strong ? 'Paris Saint Germain' : 'Marseille',
+        logo: strong ? 'https://media.example/psg.png' : 'https://media.example/om.png',
+      },
+      form: strong ? 'WWDLWWWDLW' : 'LDWLLDWWLD',
+      fixtures: {
+        played: { home: 17, away: 17, total: 34 },
+        wins: { home: 14 - shift, away: 8 - shift, total: 22 - 2 * shift },
+        draws: { home: 2, away: 5 + shift, total: 7 + shift },
+        loses: { home: 1 + shift, away: 4, total: 5 + shift },
+      },
+      goals: {
+        for: {
+          total: { home: 45 - shift, away: 36 - shift, total: 81 - 2 * shift },
+          average: { home: strong ? '2.6' : '2.3', away: strong ? '2.1' : '1.8', total: strong ? '2.4' : '2.0' },
+          minute: minute(strong ? [9, 12, 15, 14, 13, 18] : [11, 8, 9, 12, 10, 19]),
+        },
+        against: {
+          total: { home: 12 + shift, away: 21 + shift, total: 33 + 2 * shift },
+          average: { home: strong ? '0.7' : '1.1', away: strong ? '1.2' : '1.5', total: strong ? '1.0' : '1.3' },
+          minute: minute(strong ? [3, 5, 6, 7, 6, 6] : [4, 6, 5, 9, 8, 13]),
         },
       },
-      against: {
-        total: { home: 12, away: 21, total: 33 },
-        average: { home: '0.7', away: '1.2', total: '1.0' },
-        minute: {
-          '0-15': { total: 3, percentage: '9.09%' },
-          '16-30': { total: 5, percentage: '15.15%' },
-          '31-45': { total: 6, percentage: '18.18%' },
-          '46-60': { total: 7, percentage: '21.21%' },
-          '61-75': { total: 6, percentage: '18.18%' },
-          '76-90': { total: 6, percentage: '18.18%' },
-        },
+      biggest: {
+        streak: { wins: strong ? 7 : 3, draws: 2, loses: strong ? 2 : 4 },
+        wins: { home: '6-0', away: '0-5' },
+        loses: { home: '0-2', away: '3-1' },
       },
-    },
-    biggest: {
-      streak: { wins: 7, draws: 2, loses: 2 },
-      wins: { home: '6-0', away: '0-5' },
-      loses: { home: '0-2', away: '3-1' },
-    },
-    clean_sheet: { home: 9, away: 4, total: 13 },
-    failed_to_score: { home: 1, away: 3, total: 4 },
-    penalty: {
-      scored: { total: 8, percentage: '88.89%' },
-      missed: { total: 1, percentage: '11.11%' },
-      total: 9,
-    },
-    lineups: [
-      { formation: '4-3-3', played: 24 },
-      { formation: '4-2-3-1', played: 8 },
-      { formation: '3-5-2', played: 2 },
-    ],
-    cards: { yellow: {}, red: {} },
-  }),
+      clean_sheet: { home: 9, away: 4, total: strong ? 13 : 7 },
+      failed_to_score: { home: 1, away: 3, total: strong ? 4 : 9 },
+      penalty: {
+        scored: { total: 8, percentage: '88.89%' },
+        missed: { total: 1, percentage: '11.11%' },
+        total: 9,
+      },
+      lineups: [
+        { formation: strong ? '4-3-3' : '3-4-3', played: 24 },
+        { formation: '4-2-3-1', played: 8 },
+        { formation: '3-5-2', played: 2 },
+      ],
+      cards: {
+        yellow: {
+          '0-15': { total: 4, percentage: '8%' },
+          '46-60': { total: 12 + shift, percentage: '24%' },
+          '76-90': { total: 15 + shift, percentage: '30%' },
+        },
+        red: { '76-90': { total: strong ? 1 : 3, percentage: '100%' } },
+      },
+    };
+  },
 
   '/players': (p) => {
     if (p.get('id')) {
@@ -431,6 +478,47 @@ const ENDPOINTS = {
     if (!search) return all;
     return all.filter((l) => l.league.name.toLowerCase().includes(search.toLowerCase()));
   },
+
+  /**
+   * Cotes : deux bookmakers, trois marches. Les valeurs sont volontairement
+   * asymetriques pour que la suppression de la marge et la comparaison au
+   * modele produisent des chiffres distincts, pas des egalites parfaites.
+   */
+  '/odds': (p) => ([{
+    league: { id: 61, season: 2025 },
+    fixture: { id: Number(p.get('fixture')) || 1005, timezone: 'UTC', date: `${today()}T20:00:00+00:00` },
+    update: `${today()}T09:00:00+00:00`,
+    bookmakers: [
+      {
+        id: 8, name: 'Bet365',
+        bets: [
+          { id: 1, name: 'Match Winner', values: [
+            { value: 'Home', odd: '1.80' },
+            { value: 'Draw', odd: '3.60' },
+            { value: 'Away', odd: '4.50' },
+          ] },
+          { id: 5, name: 'Goals Over/Under', values: [
+            { value: 'Over 2.5', odd: '1.85' },
+            { value: 'Under 2.5', odd: '1.95' },
+          ] },
+          { id: 8, name: 'Both Teams Score', values: [
+            { value: 'Yes', odd: '1.70' },
+            { value: 'No', odd: '2.10' },
+          ] },
+        ],
+      },
+      {
+        id: 6, name: 'Bwin',
+        bets: [
+          { id: 1, name: 'Match Winner', values: [
+            { value: 'Home', odd: '1.84' },
+            { value: 'Draw', odd: '3.50' },
+            { value: 'Away', odd: '4.40' },
+          ] },
+        ],
+      },
+    ],
+  }]),
 
   '/standings': () => ([{
     league: {

@@ -18,7 +18,7 @@ test.describe('fiche de match', () => {
   });
 
   test('l\'onglet resume liste les faits de match', async ({ page }) => {
-    await expect(page.locator('.event')).toHaveCount(3);
+    await expect(page.locator('.event')).toHaveCount(6);
     const first = page.locator('.event').first();
     await expect(first.locator('.event__minute')).toHaveText("23'");
     await expect(first).toContainText('Ousmane Dembele');
@@ -27,7 +27,7 @@ test.describe('fiche de match', () => {
   });
 
   test('le temps additionnel est affiche', async ({ page }) => {
-    await expect(page.locator('.event').nth(2).locator('.event__minute')).toHaveText("90+3'");
+    await expect(page.locator('.event').last().locator('.event__minute')).toHaveText("90+3'");
   });
 
   test('l\'onglet statistiques compare les deux equipes', async ({ page }) => {

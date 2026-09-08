@@ -105,6 +105,27 @@ export function retryFailed(db, scope = null) {
   return result.changes;
 }
 
+/**
+ * Remet en file les taches d'un type donne, deja faites.
+ *
+ * Sert aux donnees qui bougent : les cotes surtout, dont un unique releve ne
+ * dit rien. La file dedoublonne par (endpoint, parametres) ; sans cette
+ * remise a zero, un second passage ne redemanderait jamais les memes cotes,
+ * et la serie resterait a un point.
+ *
+ * @param {Set<string>|string[]} kinds types de taches a rouvrir
+ * @param {string|null} scope limite a une competition et une saison
+ */
+export function reopenTasks(db, kinds, scope = null) {
+  const list = [...kinds];
+  if (!list.length) return 0;
+  const holes = list.map(() => '?').join(', ');
+  const sql = `UPDATE tasks SET state = 'pending', attempts = 0, updated_at = ?
+    WHERE state IN ('done', 'failed') AND kind IN (${holes})${scope ? ' AND scope = ?' : ''}`;
+  const args = scope ? [nowIso(), ...list, scope] : [nowIso(), ...list];
+  return db.prepare(sql).run(...args).changes;
+}
+
 /* ------------------------------ Archive brute ------------------------------ */
 
 export function saveRaw(db, { endpoint, params, results, payload }) {
@@ -134,10 +155,14 @@ export function readRaw(db, endpoint, params) {
 
 export function* iterateRaw(db, endpoint) {
   const rows = db.prepare(
-    'SELECT params_json, payload FROM raw_responses WHERE endpoint = ? ORDER BY id',
+    'SELECT params_json, payload, fetched_at FROM raw_responses WHERE endpoint = ? ORDER BY id',
   ).all(endpoint);
   for (const row of rows) {
-    yield { params: JSON.parse(row.params_json), response: JSON.parse(row.payload) };
+    yield {
+      params: JSON.parse(row.params_json),
+      response: JSON.parse(row.payload),
+      fetchedAt: row.fetched_at,
+    };
   }
 }
 

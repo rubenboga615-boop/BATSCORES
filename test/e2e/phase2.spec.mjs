@@ -103,8 +103,8 @@ test.describe('fiche équipe enrichie', () => {
     await page.goto('/#/equipe/85');
     await page.waitForSelector('.minute-bars');
 
-    // Deux graphiques : buts marqués et buts encaissés.
-    await expect(page.locator('.minute-bars')).toHaveCount(2);
+    // Un seul graphique désormais : marqués et encaissés partagent l'axe.
+    await expect(page.locator('.minute-bars')).toHaveCount(1);
     await expect(page.locator('.card').filter({ hasText: 'Records de la saison' }))
       .toContainText('Plus longue serie de victoires');
     await expect(page.locator('.card').filter({ hasText: 'Formations utilisees' })

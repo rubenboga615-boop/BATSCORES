@@ -16,6 +16,7 @@ import { renderFavorites } from './views/favorites.js';
 import { renderTeam } from './views/team.js';
 import { renderPlayer, bindPlayerEvents } from './views/player.js';
 import { renderSearch } from './views/search.js';
+import { renderCompare } from './views/compare.js';
 import { renderCollector, bindCollectorEvents, refreshCollector } from './views/collector.js';
 
 const root = document.getElementById('app');
@@ -31,6 +32,7 @@ route('/equipe/:id', (ctx) => renderTeam(root, ctx));
 route('/joueur/:id', (ctx) => renderPlayer(root, ctx));
 route('/favoris', () => renderFavorites(root));
 route('/recherche', (ctx) => renderSearch(root, ctx));
+route('/comparer', (ctx) => renderCompare(root, ctx));
 route('/collecte', () => renderCollector(root));
 
 setNotFound(() => {

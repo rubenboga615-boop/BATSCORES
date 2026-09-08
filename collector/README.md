@@ -43,6 +43,7 @@ npm run collect -- status
 | `derive` | Reconstruit les tables normalisees depuis l'archive brute |
 | `status` | File d'attente, quota consomme, volumetrie de la base |
 | `retry` | Remet les taches en echec dans la file |
+| `cotes` | Rouvre le releve des cotes pour en refaire un et tracer la derive |
 
 Options : `--league`, `--season`, `--profile`, `--max-calls`, `--db`, `--quiet`.
 
@@ -218,6 +219,37 @@ donc voir **pourquoi** il penche d'un cote.
 La confiance est l'ecart de la distribution 1N2 a l'incertitude maximale : un
 match indecis donne mecaniquement une confiance basse, ce qui est honnete.
 
+## Cotes : la seule donnee qui perd son sens si on n'en garde qu'une photo
+
+Toutes les autres donnees sont figees une fois le match joue. Les cotes, non :
+leur mouvement dit quelque chose que leur valeur finale ne dit pas. La table
+`odds` ne garde que le dernier etat ; `odds_snapshots` garde **chaque releve**,
+date par la reponse qui l'a produit.
+
+La derivation alimente cette table sans appel supplementaire : elle relit
+l'archive brute et y ajoute un point par reponse `/odds` archivee. Comme la
+date vient de la reponse et non de l'heure de derivation, rejouer la
+derivation ne fabrique aucun faux point.
+
+Reste que la file de taches dedoublonne : une fois les cotes d'une rencontre
+collectees, elles ne le seraient plus jamais. D'ou une commande dediee :
+
+```bash
+# Rouvrir le releve, puis le refaire : un point de plus sur la courbe
+npm run collect -- cotes --league 61 --season 2025
+npm run collect -- run   --league 61 --season 2025 --profile complet
+```
+
+Deux passages espaces de quelques heures suffisent a tracer une derive. Un
+seul releve n'en trace aucune, et l'interface le dit plutot que de faire
+semblant.
+
+A la lecture (`collector/odds.mjs`), les cotes des differents bookmakers sont
+agregees par la mediane — un operateur isole ne deplace donc pas la serie — et
+la marge est retiree avant toute comparaison. Sans cela, les probabilites
+implicites totalisent 105 a 110 % et notre modele paraitrait systematiquement
+plus optimiste que le marche, ce qui serait un artefact et non un signal.
+
 ## Tests
 
 Le collecteur est teste contre un faux fournisseur qui simule une saison
@@ -225,5 +257,6 @@ complete (`test/mock-season.mjs`) : calendrier aller-retour, faits de match,
 compositions, statistiques d'equipe et de joueur, pagination.
 
 Les tests couvrent notamment la reprise apres interruption, l'absence de
-double appel, l'arret sur quota epuise, et le fait que la derivation soit
-rejouable sans creer de doublon.
+double appel, l'arret sur quota epuise, le fait que la derivation soit
+rejouable sans creer de doublon, et le fait qu'un second releve de cotes
+allonge la serie au lieu d'ecraser le premier.

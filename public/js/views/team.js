@@ -5,25 +5,50 @@ import { countryName } from '../i18n.js';
 import { backLink, matchRow, skeletonList, emptyState, errorState } from '../components.js';
 
 /**
+ * Buts marques et encaisses sur le meme axe : au-dessus ce qu'on met, en
+ * dessous ce qu'on prend. Deux graphiques separes obligeaient a comparer de
+ * memoire des echelles differentes ; ici l'echelle est commune et le profil
+ * de l'equipe saute aux yeux — qui craque en fin de match, qui demarre fort.
+ */
+function minuteChart(scored, conceded) {
+  if (!scored?.length && !conceded?.length) return '';
+  const slots = scored?.length ? scored : conceded;
+  const byRange = new Map((conceded || []).map((m) => [m.range, m.total]));
+  const max = Math.max(
+    ...(scored || []).map((m) => m.total),
+    ...(conceded || []).map((m) => m.total),
+    1,
+  );
+  const height = (v) => Math.max(2, (v / max) * 56);
+
+  return `
+    <div class="minute-bars minute-bars--split">
+      ${slots.map((slot) => {
+    const up = scored?.find((m) => m.range === slot.range)?.total ?? 0;
+    const down = byRange.get(slot.range) ?? 0;
+    return `
+        <div class="minute-bar">
+          <span class="minute-bar__n">${up}</span>
+          <span class="minute-bar__stack">
+            <span class="minute-bar__col" style="height:${height(up)}px"></span>
+            <span class="minute-bar__col against" style="height:${height(down)}px"></span>
+          </span>
+          <span class="minute-bar__n against">${down}</span>
+          <span class="minute-bar__label">${esc(slot.range)}</span>
+        </div>`;
+  }).join('')}
+    </div>
+    <div class="versus__legend">
+      <span class="dot"></span>marques
+      <span class="dot against"></span>encaisses
+    </div>`;
+}
+
+/**
  * Statistiques de saison : l'endpoint le plus riche de l'API et le plus
  * sous-exploite. Series, plus larges scores, buts par quart d'heure,
  * formations, penaltys.
  */
-function minuteChart(minutes, against = false) {
-  if (!minutes?.length) return '';
-  const max = Math.max(...minutes.map((m) => m.total), 1);
-  return `
-    <div class="minute-bars">
-      ${minutes.map((m) => `
-        <div class="minute-bar">
-          <span class="minute-bar__n">${m.total}</span>
-          <span class="minute-bar__col ${against ? 'against' : ''}"
-                style="height:${Math.max(3, (m.total / max) * 70)}px"></span>
-          <span class="minute-bar__label">${esc(m.range)}</span>
-        </div>`).join('')}
-    </div>`;
-}
-
 function statisticsBlocks(stats) {
   if (!stats?.available) {
     return emptyState(
@@ -80,12 +105,8 @@ function statisticsBlocks(stats) {
     ${form ? `<div class="card"><div class="card__title">Forme recente</div>${form}</div>` : ''}
     <div class="card"><div class="card__title">Bilan de la saison</div>${bilan}</div>
     <div class="card">
-      <div class="card__title">Buts marques par tranche de 15 minutes</div>
-      ${minuteChart(stats.goals?.for?.minute)}
-    </div>
-    <div class="card">
-      <div class="card__title">Buts encaisses par tranche de 15 minutes</div>
-      ${minuteChart(stats.goals?.against?.minute, true)}
+      <div class="card__title">Buts par tranche de 15 minutes</div>
+      ${minuteChart(stats.goals?.for?.minute, stats.goals?.against?.minute)}
     </div>
     ${records ? `<div class="card"><div class="card__title">Records de la saison</div>${records}</div>` : ''}
     ${penalties ? `<div class="card"><div class="card__title">Bilan aux penaltys</div>${penalties}</div>` : ''}

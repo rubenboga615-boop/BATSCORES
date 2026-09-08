@@ -84,6 +84,29 @@ try {
     }
   });
   db.exec('COMMIT');
+
+  // Deux releves de cotes espaces de six heures sur la rencontre a venir :
+  // c'est le minimum pour qu'une derive existe, donc pour que l'onglet Cotes
+  // soit reellement eprouve plutot que teste a vide.
+  const snapshot = db.prepare(`INSERT INTO odds_snapshots
+    (fixture_id, bookmaker_id, bet_id, captured_at, bet_values)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (fixture_id, bookmaker_id, bet_id, captured_at) DO NOTHING`);
+  const captures = [
+    { at: new Date(Date.now() - 6 * 3600_000).toISOString(), home: '2.10', draw: '3.40', away: '3.60' },
+    { at: new Date(Date.now() - 3600_000).toISOString(), home: '1.80', draw: '3.60', away: '4.50' },
+  ];
+  for (const capture of captures) {
+    for (const bookmaker of [8, 6]) {
+      snapshot.run(1005, bookmaker, 1, capture.at, JSON.stringify([
+        { value: 'Home', odd: capture.home },
+        { value: 'Draw', odd: capture.draw },
+        { value: 'Away', odd: capture.away },
+      ]));
+    }
+    // Marche archive sans cote exploitable : il doit disparaitre de la page.
+    snapshot.run(1005, 8, 5, capture.at, '[]');
+  }
   db.close();
 } catch {
   // Node 20 : la page affichera "collecteur indisponible", ce qui est teste.

@@ -25,6 +25,12 @@ historique interrogeable a partir de la meme cle API : voir
   blessures et suspensions.
 - **Pronostic** : le moteur du fournisseur et notre propre modele, entraine sur les
   donnees collectees, avec les forces estimees et la confiance.
+- **Momentum** : courbe de pression minute par minute, reconstruite a partir des faits
+  de match, avec la part de temps a l'avantage de chaque equipe.
+- **Cotes et derive** : probabilites degonflees de la marge du bookmaker, mouvement
+  entre le premier et le dernier releve, et ecart avec notre modele.
+- **Comparateur d'equipes** : quatorze indicateurs de saison face a face, ramenes au
+  match, plus le profil de buts par tranche de quinze minutes.
 - **Notes des joueurs** par rencontre, et composition dessinee sur un terrain.
 - **Quatre classements individuels** : buteurs, passeurs, cartons jaunes, cartons rouges.
 - **Classement general, a domicile et a l'exterieur**, rang et points recalcules.
@@ -116,6 +122,11 @@ Le frontend consomme ces routes ; elles sont aussi utilisables directement.
 | `GET /api/competitions/:id/fixtures?season=` | Calendrier complet. |
 | `GET /api/competitions/:id/scorers?season=` | Meilleurs buteurs. |
 | `GET /api/teams/:id` | Fiche equipe. |
+| `GET /api/teams/:id/statistics?league=&season=` | Bilan de saison detaille. |
+| `GET /api/players/:id?season=` | Fiche joueur. |
+| `GET /api/predict/:id` | Pronostic : moteur du fournisseur et modele maison. |
+| `GET /api/odds/:id` | Cotes archivees, probabilites nettes de marge et derive. |
+| `GET /api/compare?a=&b=&league=&season=` | Comparaison de deux equipes. |
 | `GET /api/search?q=` | Recherche equipes et competitions. |
 
 ## Collecteur de donnees
@@ -229,16 +240,20 @@ public/
     components.js  fragments de rendu partages
     i18n.js        traduction des libelles du fournisseur
     utils.js       formatage des dates, scores, statuts
-    views/         matchs, direct, fiche match, competitions, equipe, joueur, recherche, favoris, collecte
+    momentum.js    indice de pression reconstruit a partir des faits de match
+    views/         matchs, direct, fiche match, competitions, equipe, joueur,
+                   recherche, favoris, comparateur, collecte
   sw.js            service worker : reseau d'abord, cache en secours hors ligne
 collector/
-  schema.sql       28 tables : archive brute, file de travail, donnees normalisees
+  schema.sql       29 tables : archive brute, file de travail, donnees normalisees
   lock.mjs         verrou partage : une seule collecte a la fois
   db.mjs           acces SQLite, file de taches, comptabilite du quota
   client.mjs       client API : limitation de debit, reprises, archivage brut
   plan.mjs         profils de collecte et estimation du cout
   worker.mjs       boucle d'execution reprenable
   derive.mjs       archive brute -> tables normalisees
+  predict.mjs      modele Dixon-Coles entraine sur la base
+  odds.mjs         lecture des cotes : marge retiree, derive, ecart au modele
   cli.mjs          ligne de commande
 test/
   mock-api.mjs     faux fournisseur API-Football
@@ -247,6 +262,10 @@ test/
   stack.mjs        pile faux fournisseur + application, pour les tests navigateur
   mock-season.mjs  faux fournisseur simulant une saison complete
   collector.test.mjs tests du collecteur
+  predict.test.mjs   tests du modele de prediction
+  odds.test.mjs      tests de lecture des cotes
+  momentum.test.mjs  tests de la courbe de pression
+  analytics.test.mjs tests du comparateur et de la route des cotes
   e2e/             tests d'interface Playwright
 .github/workflows/
   ci.yml           integration continue

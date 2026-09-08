@@ -333,6 +333,22 @@ CREATE TABLE IF NOT EXISTS odds (
   PRIMARY KEY (fixture_id, bookmaker_id, bet_id)
 );
 
+-- Les cotes bougent, et ce mouvement dit quelque chose : c'est la seule
+-- donnee du lot qui perd tout son sens si on n'en garde que la derniere
+-- valeur. On archive donc chaque releve, date par la reponse d'origine.
+-- Deux collectes espacees dans le temps suffisent a tracer une derive.
+CREATE TABLE IF NOT EXISTS odds_snapshots (
+  fixture_id   INTEGER NOT NULL,
+  bookmaker_id INTEGER NOT NULL,
+  bet_id       INTEGER NOT NULL,
+  captured_at  TEXT    NOT NULL,          -- ISO 8601 UTC, celui du releve
+  bet_values   TEXT    NOT NULL,
+  PRIMARY KEY (fixture_id, bookmaker_id, bet_id, captured_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_odds_snapshots_fixture
+  ON odds_snapshots (fixture_id, captured_at);
+
 -- ----------------------------- Classements ---------------------------------
 
 CREATE TABLE IF NOT EXISTS standings (

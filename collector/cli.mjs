@@ -8,7 +8,7 @@
  *   npm run collect -- status
  */
 import 'dotenv/config';
-import { openDatabase, DEFAULT_DB_PATH, taskCounts, usageHistory, callsToday, retryFailed } from './db.mjs';
+import { openDatabase, DEFAULT_DB_PATH, taskCounts, usageHistory, callsToday, retryFailed, reopenTasks } from './db.mjs';
 import { Client } from './client.mjs';
 import { estimate, scopeOf, PROFILES } from './plan.mjs';
 import { runCollector } from './worker.mjs';
@@ -47,6 +47,7 @@ BATSCORES - collecteur de donnees
   derive   Reconstruit les tables normalisees depuis l'archive brute
   status   Etat de la file, du quota et de la base
   retry    Remet les taches en echec dans la file
+  cotes    Rouvre le releve des cotes pour en refaire un (trace la derive)
 
 Options :
   --league <id>       identifiant de competition (61 = Ligue 1)
@@ -56,8 +57,12 @@ Options :
   --db <chemin>       fichier de base (defaut : data/batscores.db)
   --quiet             sortie minimale
 
-Exemple :
+Exemples :
   npm run collect -- plan --league 61 --season 2023 --profile complet
+  npm run collect -- cotes --league 61 --season 2023   puis   run --profile complet
+
+La derive des cotes se construit avec le temps : chaque passage de "cotes"
+suivi d'un "run" ajoute un point a la courbe. Un seul releve n'en trace aucune.
 `);
 }
 
@@ -179,6 +184,17 @@ async function main() {
       : null;
     const n = retryFailed(db, scope);
     console.log(`${n} tache(s) remise(s) en file.`);
+    return undefined;
+  }
+
+  if (command === 'cotes') {
+    const scope = opts.league && opts.season
+      ? scopeOf(Number(opts.league), Number(opts.season))
+      : null;
+    const n = reopenTasks(db, ['fixture_odds'], scope);
+    console.log(`${n} releve(s) de cotes remis en file.`);
+    if (n) console.log('Lancez "run" pour les collecter : chaque passage ajoute un point a la derive.');
+    else console.log("Aucune tache de cotes : elles ne sont planifiees que sur les profils complet et total, et seulement sur les rencontres non jouees.");
     return undefined;
   }
 

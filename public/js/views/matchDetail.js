@@ -7,6 +7,7 @@ import {
 import { backLink, tabsBar, emptyState, errorState, skeletonList, matchRow } from '../components.js';
 import { store } from '../store.js';
 import { countryName } from '../i18n.js';
+import { momentumSeries, momentumChart, dominanceShare } from '../momentum.js';
 
 const state = { id: null, data: null, tab: 'summary' };
 
@@ -67,6 +68,49 @@ function header(fixture) {
           <button class="filter ${starred ? 'is-active' : ''}" data-star="${fixture.id}">
             ${starred ? '★ Suivi' : '☆ Suivre ce match'}
           </button>
+          <a class="filter" href="#/comparer?a=${fixture.home.id}&b=${fixture.away.id}&league=${fixture.league.id}&season=${fixture.league.season || ''}">
+            ⇄ Comparer les deux equipes
+          </a>
+        </div>
+      </div>
+    </div>`;
+}
+
+/**
+ * Bloc de momentum. Il n'apparait que si les evenements portent un signal :
+ * une rencontre sans but ni carton ne produit pas de courbe, et une courbe
+ * plate vaut moins que rien.
+ */
+function momentumBlock(fixture, events) {
+  const series = momentumSeries(events, fixture);
+  if (!series) return '';
+  const share = dominanceShare(series);
+  return `
+    <div class="card">
+      <div class="card__title">Momentum</div>
+      <div class="momentum__legend">
+        <span class="momentum__team home">${esc(fixture.home.name)}</span>
+        <span class="momentum__team away">${esc(fixture.away.name)}</span>
+      </div>
+      ${momentumChart(series)}
+      <div class="momentum__axis-labels">
+        <span>0'</span><span>45'</span><span>${series.span}'</span>
+      </div>
+      <div class="stat">
+        <div class="stat__row">
+          <span class="stat__value">${share.home} %</span>
+          <span class="stat__label">temps a l'avantage</span>
+          <span class="stat__value">${share.away} %</span>
+        </div>
+        <div class="stat__bar">
+          <i class="home" style="width:${share.home}%"></i>
+          <i style="background:var(--text-faint);width:${share.neutral}%"></i>
+          <i class="away" style="width:${share.away}%"></i>
+        </div>
+        <div class="stat__label" style="margin-top:8px">
+          Reconstruit a partir des faits de match : buts, penaltys, cartons,
+          annulations video. Le fournisseur ne publie pas les attaques minute
+          par minute, cette courbe est donc un indice de pression, pas une mesure.
         </div>
       </div>
     </div>`;
@@ -95,7 +139,7 @@ function summaryPanel({ fixture, events }) {
         </div>
       </div>`;
   }).join('');
-  return `<div class="card"><div class="card__title">Faits de match</div>${rows}</div>`;
+  return `${momentumBlock(fixture, events)}<div class="card"><div class="card__title">Faits de match</div>${rows}</div>`;
 }
 
 function statisticsPanel({ statistics }) {
@@ -437,24 +481,127 @@ function predictionPanel({ prediction, fixture }) {
   return blocks.join('') + note;
 }
 
+/* ---------------------------------- Cotes ---------------------------------- */
+
+/** Fleche de mouvement : le sens compte plus que la valeur exacte. */
+function driftArrow(delta) {
+  if (delta >= 1) return `<span class="drift up">▲ +${delta.toFixed(1)} pt</span>`;
+  if (delta <= -1) return `<span class="drift down">▼ ${delta.toFixed(1)} pt</span>`;
+  return '<span class="drift flat">— stable</span>';
+}
+
+/** Courbe de la probabilite implicite d'une issue, releve apres releve. */
+function driftSpark(series, outcome) {
+  const values = series
+    .map((s) => s.probabilities[outcome])
+    .filter((v) => v !== undefined);
+  if (values.length < 2) return '';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(max - min, 1);
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * 100;
+    const y = 20 - ((v - min) / range) * 18 - 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg class="spark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${points}" /></svg>`;
+}
+
+function marketCard(market) {
+  const latest = market.latest;
+  const rows = Object.entries(latest.probabilities).map(([outcome, prob]) => {
+    const move = market.drift?.moves.find((m) => m.outcome === outcome);
+    return `
+      <div class="odd">
+        <div class="odd__label">${esc(market.outcomeLabels?.[outcome] || outcome)}</div>
+        <div class="odd__price">${esc(latest.prices[outcome] ?? '—')}</div>
+        <div class="odd__prob">${prob} %</div>
+        <div class="odd__spark">${driftSpark(market.series, outcome)}</div>
+        <div class="odd__drift">${move ? driftArrow(move.delta) : ''}</div>
+      </div>`;
+  }).join('');
+
+  const notable = market.comparison.filter((c) => c.notable);
+  const edge = notable.length ? `
+    <div class="stat">
+      <div class="stat__label">Ecart avec notre modele</div>
+      ${notable.map((c) => `
+        <div class="stat__row">
+          <span class="stat__label">${esc(c.label)}</span>
+          <span class="stat__value ${c.edge > 0 ? 'edge-up' : 'edge-down'}">
+            modele ${c.model} % · marche ${c.market} % (${c.edge > 0 ? '+' : ''}${c.edge} pt)
+          </span>
+        </div>`).join('')}
+    </div>` : '';
+
+  return `
+    <div class="card">
+      <div class="card__title">${esc(market.label)}</div>
+      <div class="odd odd--head">
+        <div class="odd__label">Issue</div>
+        <div class="odd__price">Cote</div>
+        <div class="odd__prob">Proba.</div>
+        <div class="odd__spark">Courbe</div>
+        <div class="odd__drift">Mouvement</div>
+      </div>
+      ${rows}
+      ${edge}
+      <div class="stat">
+        <div class="stat__label">
+          ${market.captures} releve${market.captures > 1 ? 's' : ''}${market.drift ? ` sur ${market.drift.hours} h` : ''}
+          · mediane de ${latest.bookmakers} bookmaker${latest.bookmakers > 1 ? 's' : ''}
+          · marge retiree (${latest.margin} %)
+        </div>
+      </div>
+    </div>`;
+}
+
+function oddsPanel({ odds }) {
+  if (!odds) return skeletonList(2);
+  if (!odds.markets?.length) {
+    return emptyState('Cotes indisponibles', odds.diagnostic || "Aucune cote pour cette rencontre.", '💱');
+  }
+  const note = odds.diagnostic
+    ? `<div class="card"><div class="stat"><div class="stat__label">${esc(odds.diagnostic)}</div></div></div>`
+    : '';
+  return `
+    <div class="card">
+      <div class="stat"><div class="stat__label">
+        Les probabilites affichees sont degonflees de la marge du bookmaker :
+        elles totalisent 100 %, contrairement aux cotes brutes. Le mouvement
+        compare le dernier releve au premier.
+      </div></div>
+    </div>
+    ${odds.markets.map(marketCard).join('')}${note}`;
+}
+
 const PANELS = {
   summary: summaryPanel,
   players: playersPanel,
   prediction: predictionPanel,
+  odds: oddsPanel,
   lineups: lineupsPanel,
   stats: statisticsPanel,
   h2h: h2hPanel,
+};
+
+/** Onglets dont le contenu coute un appel : charges seulement si on les ouvre. */
+const LAZY = {
+  prediction: { key: 'prediction', path: (id) => `/api/predict/${id}` },
+  odds: { key: 'odds', path: (id) => `/api/odds/${id}` },
 };
 
 async function renderPanel(root) {
   const panel = root.querySelector('#match-panel');
   if (!panel || !state.data) return;
 
-  if (state.tab === 'prediction' && !state.data.prediction) {
+  const lazy = LAZY[state.tab];
+  if (lazy && !state.data[lazy.key]) {
     panel.innerHTML = skeletonList(3);
     try {
-      const response = await fetch(`/api/predict/${state.id}`);
-      state.data.prediction = await response.json();
+      const response = await fetch(lazy.path(state.id));
+      state.data[lazy.key] = await response.json();
     } catch (err) {
       panel.innerHTML = errorState(err);
       return;
@@ -483,6 +630,7 @@ export async function renderMatchDetail(root, { params }) {
   const tabs = [
     { id: 'summary', label: 'Resume' },
     { id: 'prediction', label: 'Pronostic' },
+    { id: 'odds', label: 'Cotes' },
     { id: 'players', label: 'Joueurs' },
     { id: 'stats', label: 'Statistiques' },
     { id: 'lineups', label: 'Compositions' },
@@ -519,6 +667,11 @@ export async function refreshMatchDetail(root) {
   if (state.data.fixture.status.phase !== 'live') return;
   try {
     const fresh = await api.fixture(state.id);
+    // Les panneaux charges a la demande ne sont pas dans cette reponse : les
+    // perdre a chaque cycle relancerait un appel toutes les trente secondes.
+    for (const { key } of Object.values(LAZY)) {
+      if (state.data[key]) fresh[key] = state.data[key];
+    }
     state.data = fresh;
     const headerEl = root.querySelector('.mh');
     if (headerEl) headerEl.outerHTML = header(fresh.fixture);

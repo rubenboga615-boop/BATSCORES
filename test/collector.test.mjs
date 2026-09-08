@@ -19,7 +19,8 @@ if (!hasSqlite) {
 
 async function registerSuite() {
 const { startSeasonMock } = await import('./mock-season.mjs');
-const { openDatabase, taskCounts, callsToday, retryFailed } = await import('../collector/db.mjs');
+const dbModule = await import('../collector/db.mjs');
+const { openDatabase, taskCounts, callsToday, retryFailed } = dbModule;
 const { Client } = await import('../collector/client.mjs');
 const { seedPlan, estimate, scopeOf, allowedKinds } = await import('../collector/plan.mjs');
 const { runCollector } = await import('../collector/worker.mjs');
@@ -228,6 +229,62 @@ describe('derivation', () => {
 
     assert.equal(secondCount, firstCount, 'pas de doublon a la seconde derivation');
     assert.equal(callsToday(db), callsAfterCollect, 'aucun appel API');
+  });
+
+  test('chaque collecte de cotes ajoute un releve date au lieu d\'ecraser le precedent', () => {
+    const db = newDb();
+    const { saveRaw } = dbModule;
+    const odds = (home) => ([{
+      fixture: { id: 4242 },
+      bookmakers: [{ id: 8, name: 'Bet365', bets: [{ id: 1, name: 'Match Winner', values: [
+        { value: 'Home', odd: home },
+        { value: 'Draw', odd: '3.50' },
+        { value: 'Away', odd: '4.00' },
+      ] }] }],
+    }]);
+
+    // Premiere collecte, puis derivation.
+    saveRaw(db, { endpoint: '/odds', params: { fixture: 4242 }, results: 1, payload: odds('2.10') });
+    db.prepare("UPDATE raw_responses SET fetched_at = '2026-01-01T08:00:00.000Z' WHERE endpoint = '/odds'").run();
+    deriveAll(db);
+
+    // Deuxieme collecte du meme match, six heures plus tard : l'archive brute
+    // est ecrasee — c'est sa regle — mais la serie, elle, doit s'allonger.
+    saveRaw(db, { endpoint: '/odds', params: { fixture: 4242 }, results: 1, payload: odds('1.80') });
+    db.prepare("UPDATE raw_responses SET fetched_at = '2026-01-01T14:00:00.000Z' WHERE endpoint = '/odds'").run();
+    deriveAll(db);
+
+    const rows = db.prepare('SELECT captured_at, bet_values FROM odds_snapshots ORDER BY captured_at').all();
+    assert.equal(rows.length, 2, 'les deux releves doivent coexister');
+    assert.match(rows[0].bet_values, /2\.10/);
+    assert.match(rows[1].bet_values, /1\.80/);
+
+    // La table de synthese, elle, ne garde bien que la derniere valeur.
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM odds').get().n, 1);
+
+    // Rejouer la derivation ne cree pas de faux points dans la serie.
+    deriveAll(db);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM odds_snapshots').get().n, 2);
+  });
+
+  test('rouvrir le releve des cotes est ce qui rend un second passage possible', () => {
+    const db = newDb();
+    const { enqueue, markTask, reopenTasks } = dbModule;
+    const scope = 'league:61|season:2023';
+    enqueue(db, { kind: 'fixture_odds', endpoint: '/odds', params: { fixture: 1 }, scope });
+    enqueue(db, { kind: 'fixture_events', endpoint: '/fixtures/events', params: { fixture: 1 }, scope });
+    for (const t of db.prepare('SELECT id FROM tasks').all()) markTask(db, t.id, 'done');
+
+    // Sans reouverture, la file est vide : c'est la deduplication qui protege
+    // le quota, et c'est aussi ce qui figeait les cotes a un seul releve.
+    assert.equal(taskCounts(db).pending, 0);
+
+    assert.equal(reopenTasks(db, ['fixture_odds'], scope), 1, 'seules les cotes sont rouvertes');
+    const pending = db.prepare("SELECT kind FROM tasks WHERE state = 'pending'").all();
+    assert.deepEqual(pending.map((t) => t.kind), ['fixture_odds']);
+
+    // Une autre competition n'est pas touchee.
+    assert.equal(reopenTasks(db, ['fixture_odds'], 'league:39|season:2023'), 0);
   });
 });
 
