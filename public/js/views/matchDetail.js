@@ -576,8 +576,91 @@ function oddsPanel({ odds }) {
     ${odds.markets.map(marketCard).join('')}${note}`;
 }
 
+/* --------------------------- Contexte : meteo, video ------------------------ */
+
+function weatherCard(weather) {
+  if (!weather) return '';
+  if (!weather.available) {
+    return `
+      <div class="card">
+        <div class="card__title">Meteo au stade</div>
+        <div class="stat"><div class="stat__label">${esc(weather.reason || 'Prevision indisponible.')}</div></div>
+      </div>`;
+  }
+
+  const kv = (rows) => `<div class="kv">${rows.filter(Boolean).map(([k, v]) => `
+    <div class="kv__row"><span class="kv__k">${esc(k)}</span><span class="kv__v">${esc(v)}</span></div>`).join('')}</div>`;
+
+  const degres = (v) => (v === null || v === undefined ? '—' : `${Math.round(v)} °C`);
+
+  return `
+    <div class="card">
+      <div class="card__title">Meteo au stade</div>
+      <div class="weather">
+        <span class="weather__icon" aria-hidden="true">${weather.icon}</span>
+        <div>
+          <div class="weather__temp">${degres(weather.temperature)}</div>
+          <div class="weather__label">${esc(weather.condition)}${weather.place?.name ? ` · ${esc(weather.place.name)}` : ''}</div>
+        </div>
+      </div>
+      ${kv([
+    weather.feelsLike !== null && ['Ressenti', degres(weather.feelsLike)],
+    weather.precipitationProbability !== null && ['Risque de pluie', `${weather.precipitationProbability} %`],
+    weather.precipitation ? ['Precipitations', `${weather.precipitation} mm`] : null,
+    weather.wind !== null && ['Vent', `${Math.round(weather.wind)} km/h${weather.windDirection ? ` de ${weather.windDirection}` : ''}`],
+    weather.humidity !== null && ['Humidite', `${weather.humidity} %`],
+  ])}
+      <div class="stat"><div class="stat__label">
+        Prevision a l'heure du coup d'envoi, fournie par Open-Meteo.
+      </div></div>
+    </div>`;
+}
+
+function videoCard(video) {
+  if (!video) return '';
+
+  const trouvees = video.items?.length
+    ? `<div class="card">
+        <div class="card__title">Resumes</div>
+        ${video.items.map((item) => `
+          <a class="news" href="${esc(item.url || '#')}" target="_blank" rel="noopener noreferrer">
+            <div class="news__title">${esc(item.title)}</div>
+            <div class="news__meta">${esc([item.competition, item.publishedAt ? new Date(item.publishedAt).toLocaleDateString('fr-FR') : null].filter(Boolean).join(' · '))}</div>
+            <span class="news__out" aria-hidden="true">↗</span>
+          </a>`).join('')}
+      </div>`
+    : '';
+
+  const recherche = video.search?.length
+    ? `<div class="card">
+        <div class="card__title">${video.items?.length ? 'Chercher ailleurs' : 'Chercher le resume'}</div>
+        <div class="chips" style="padding:12px 14px">
+          ${video.search.map((link) => `
+            <a class="chip" href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">
+              ${esc(link.site)} ↗
+            </a>`).join('')}
+        </div>
+      </div>`
+    : '';
+
+  const note = video.diagnostic
+    ? `<div class="card"><div class="stat"><div class="stat__label">${esc(video.diagnostic)}</div></div></div>`
+    : '';
+
+  return `${trouvees}${recherche}${note}`;
+}
+
+function contextPanel({ media }) {
+  if (!media) return skeletonList(2);
+  if (media.error) {
+    return emptyState('Contexte indisponible', media.error, '🌦️');
+  }
+  return `${weatherCard(media.weather)}${videoCard(media.video)}`;
+}
+
 const PANELS = {
   summary: summaryPanel,
+  context: contextPanel,
   players: playersPanel,
   prediction: predictionPanel,
   odds: oddsPanel,
@@ -590,6 +673,7 @@ const PANELS = {
 const LAZY = {
   prediction: { key: 'prediction', path: (id) => `/api/predict/${id}` },
   odds: { key: 'odds', path: (id) => `/api/odds/${id}` },
+  context: { key: 'media', path: (id) => `/api/media/${id}` },
 };
 
 async function renderPanel(root) {
@@ -635,6 +719,7 @@ export async function renderMatchDetail(root, { params }) {
     { id: 'stats', label: 'Statistiques' },
     { id: 'lineups', label: 'Compositions' },
     { id: 'h2h', label: 'Confrontations' },
+    { id: 'context', label: 'Contexte' },
   ];
 
   root.innerHTML = `

@@ -358,7 +358,28 @@ de sources en contiennent. Puis `pm2 restart batscores`.
 Ces flux sont lus par le serveur, pas par le navigateur : la page ne suit
 aucune adresse fournie par un visiteur.
 
-## 11. Sauvegarder
+## 11. Meteo et resumes video
+
+La **meteo au stade** fonctionne sans reglage : Open-Meteo est gratuit et ne
+demande pas de cle. Il n'y a rien a faire.
+
+Les **resumes video** demandent un choix. API-Football n'en publie pas : sans
+fournisseur, l'onglet Contexte propose des liens de recherche vers YouTube et
+Dailymotion, deja construits avec les deux equipes et l'annee. C'est
+utilisable, mais il faut un clic de plus.
+
+Si vous souscrivez a un service de resumes qui expose un flux JSON, ajoutez :
+
+```
+VIDEO_FEED_URL=https://exemple-de-fournisseur/feed?token=votre_jeton
+```
+
+puis `pm2 restart batscores`. L'application ira y chercher les resumes de
+chaque rencontre et les affichera directement. Elle accepte plusieurs formes
+de reponse : un tableau, ou un objet contenant `response`, `items`, `results`
+ou `data`.
+
+## 12. Sauvegarder
 
 Ce qui a de la valeur, c'est la base collectee : elle represente des milliers
 d'appels payes.
@@ -391,7 +412,7 @@ scp batscores@203.0.113.42:~/sauvegardes/batscores-*.db .
 
 ---
 
-## 12. En cas de panne
+## 13. En cas de panne
 
 | Symptome | Verifier |
 | --- | --- |
@@ -402,6 +423,7 @@ scp batscores@203.0.113.42:~/sauvegardes/batscores-*.db .
 | Disque plein | `df -h` ; la base grossit, les journaux PM2 aussi (`pm2 flush`) |
 | Bouton de notification absent | Site en HTTPS ? Cles VAPID dans `.env` ? `pm2 restart batscores` |
 | Page Actus vide | `curl -s localhost:3000/api/news \| head` ; une source en panne est nommee dans la reponse |
+| Meteo absente | La ville du stade est-elle connue ? La rencontre est-elle a moins de 14 jours ? |
 
 ---
 

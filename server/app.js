@@ -16,6 +16,7 @@ import { compareRouter } from './routes/compare.js';
 import { createPushRouter } from './routes/push.js';
 import { PushStore } from './pushStore.js';
 import { newsRouter } from './routes/news.js';
+import { mediaRouter } from './routes/media.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'public');
@@ -79,6 +80,7 @@ export function createApp({ pushStore = new PushStore() } = {}) {
   app.use('/api/compare', compareRouter);
   app.use('/api/push', createPushRouter(pushStore));
   app.use('/api/news', newsRouter);
+  app.use('/api/media', mediaRouter);
   app.use('/api/collector', collectorRouter);
   app.use('/api', miscRouter);
 

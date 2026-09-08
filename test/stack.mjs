@@ -12,11 +12,47 @@ import { startMockApi } from './mock-api.mjs';
 const mock = await startMockApi();
 
 /**
- * Faux flux d'actualites. Sans lui, la page Actus irait interroger de vraies
- * redactions : les essais dependraient d'Internet et de ce qui a ete publie
- * ce jour-la.
+ * Faux services exterieurs : flux d'actualites, geocodage et meteo. Sans eux,
+ * les essais dependraient d'Internet, de ce qui a ete publie ce jour-la et du
+ * temps qu'il fait reellement a Paris.
  */
 const feed = http.createServer((req, res) => {
+  const url = new URL(req.url, 'http://x');
+
+  if (url.pathname === '/geo') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(url.searchParams.get('name') === 'Paris'
+      ? { results: [{ latitude: 48.86, longitude: 2.35, name: 'Paris', country: 'France' }] }
+      : { results: [] }));
+    return;
+  }
+
+  if (url.pathname === '/forecast') {
+    const times = [];
+    const start = new Date();
+    start.setUTCMinutes(0, 0, 0);
+    start.setUTCHours(start.getUTCHours() - 48);
+    for (let i = 0; i < 24 * 10; i += 1) {
+      times.push(new Date(start.getTime() + i * 3600_000).toISOString().slice(0, 16));
+    }
+    const serie = (v) => times.map(() => v);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      hourly: {
+        time: times,
+        temperature_2m: serie(14.2),
+        apparent_temperature: serie(12.8),
+        precipitation_probability: serie(40),
+        precipitation: serie(0.4),
+        wind_speed_10m: serie(23),
+        wind_direction_10m: serie(270),
+        relative_humidity_2m: serie(76),
+        weather_code: serie(61),
+      },
+    }));
+    return;
+  }
+
   res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' });
   res.end(`<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
@@ -51,6 +87,8 @@ process.env.DEFAULT_TIMEZONE = 'Europe/Paris';
 // navigateur signaleraient des erreurs qui n'existent pas en production.
 process.env.CSP_EXTRA_IMG_HOSTS = 'https://media.example';
 process.env.NEWS_FEEDS = `Faux Journal|http://127.0.0.1:${feed.address().port}/rss`;
+process.env.GEOCODING_URL = `http://127.0.0.1:${feed.address().port}/geo`;
+process.env.FORECAST_URL = `http://127.0.0.1:${feed.address().port}/forecast`;
 process.env.API_FOOTBALL_DAILY_LIMIT = '7500';
 process.env.COLLECTOR_DB = collectorDb;
 process.env.PORT = process.env.E2E_PORT || '4600';
@@ -151,7 +189,7 @@ app.listen(Number(process.env.PORT), '127.0.0.1', () => {
   console.log(`pile de test prete sur http://127.0.0.1:${process.env.PORT}`);
   console.log(`  faux fournisseur : ${mock.url}`);
   console.log(`  base de collecte : ${collectorDb}`);
-  console.log(`  faux flux RSS    : http://127.0.0.1:${feed.address().port}/rss`);
+  console.log(`  faux services    : http://127.0.0.1:${feed.address().port} (rss, geo, forecast)`);
 });
 
 const shutdown = async () => {

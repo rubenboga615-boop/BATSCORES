@@ -39,6 +39,7 @@ historique interrogeable a partir de la meme cle API : voir
   suivis, meme application fermee. Rien d'autre n'est envoye.
 - **Actualites** : les articles de sources RSS choisies par l'exploitant du serveur,
   fusionnes et dates.
+- **Contexte** : meteo prevue a l'heure du coup d'envoi, et resumes video.
 - **Favoris** : suivez des matchs et des competitions ; tout reste sur votre appareil.
 - **PWA** : installable sur mobile, avec demarrage instantane hors ligne du shell.
 
@@ -132,6 +133,7 @@ Le frontend consomme ces routes ; elles sont aussi utilisables directement.
 | `GET /api/odds/:id` | Cotes archivees, probabilites nettes de marge et derive. |
 | `GET /api/compare?a=&b=&league=&season=` | Comparaison de deux equipes. |
 | `GET /api/news` | Articles des sources RSS configurees. Aucun quota consomme. |
+| `GET /api/media/:id` | Meteo au stade et resumes video d'une rencontre. |
 | `GET /api/push/key` | Cle publique VAPID, ou raison de l'indisponibilite. |
 | `POST /api/push/subscribe` | Enregistre un appareil et les rencontres qu'il suit. |
 | `POST /api/push/unsubscribe` | Oublie un appareil. |
@@ -271,6 +273,35 @@ Les vignettes des articles ne sont pas affichees : elles viendraient des serveur
 redactions, ce qui obligerait a ouvrir la politique de securite du contenu a toutes
 les origines et signalerait chaque lecture a ces redactions.
 
+### Meteo au stade
+
+Fournie par **Open-Meteo** : gratuit, sans inscription ni cle, donc rien de plus a
+gerer ni a renouveler. Deux appels sont necessaires — retrouver les coordonnees de
+la ville, puis la prevision — mais le premier ne se refait jamais pour une meme
+ville : les stades ne demenagent pas.
+
+La prevision est celle de l'heure du coup d'envoi, pas celle de l'instant present.
+Au-dela de quatorze jours, ou pour une rencontre passee, l'application le dit au
+lieu d'afficher la meteo du jour pour un match d'il y a un mois.
+
+### Resumes video
+
+API-Football ne publie pas de video : c'est une limite du fournisseur. Deux chemins
+sont donc proposes.
+
+- Avec `VIDEO_FEED_URL`, l'application interroge le flux de resumes de votre choix
+  et retient ceux qui correspondent a la rencontre. L'appariement exige que **les
+  deux** equipes apparaissent dans le titre : une seule ferait remonter tous les
+  matchs du PSG de la semaine.
+- Sans configuration, elle propose des liens de recherche construits avec les deux
+  equipes et l'annee — sans l'annee, « PSG Marseille resume » remonte d'abord des
+  rencontres d'il y a dix ans. Ce n'est pas de la video servie par l'application, et
+  c'est annonce comme tel.
+
+Aucune video n'est integree en lecteur embarque : cela obligerait a autoriser les
+cadres tiers dans la politique de securite et exposerait le visiteur au traceur de
+la plateforme sans qu'il ait rien demande.
+
 ### En-tetes de securite
 
 `server/app.js` pose une politique de securite du contenu sans exception sur les
@@ -293,6 +324,8 @@ server/
   pushStore.js     abonnements, dans un fichier JSON (compatible Node 20)
   pushWatcher.js   detecte buts et changements d'etat, previent les appareils
   rss.js           lecture tolerante des flux RSS et Atom
+  weather.js       meteo au stade via Open-Meteo, coordonnees mises en cache
+  video.js         lecture d'un flux de resumes et appariement aux rencontres
   app.js           application Express : routes, en-tetes de securite, statiques
   config.js        lecture de l'environnement, choix du fournisseur
   apiFootball.js   client amont : cache, deduplication, limiteur de debit
@@ -340,6 +373,7 @@ test/
   webpush.test.mjs   chiffrement Web Push, verifie par aller-retour
   push.test.mjs      abonnements, veilleur et faits detectes
   news.test.mjs      lecture des flux RSS et Atom
+  media.test.mjs     meteo au stade et appariement des resumes
   e2e/             tests d'interface Playwright
 .github/workflows/
   ci.yml           integration continue

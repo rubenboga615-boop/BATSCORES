@@ -1155,3 +1155,19 @@ a.news:hover { background: var(--bg-hover); }
   color: var(--text-faint);
   font-size: 13px;
 }
+
+/* --------------------------------- Meteo ----------------------------------- */
+
+.weather {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-top: 1px solid var(--border);
+}
+.weather__icon { font-size: 34px; line-height: 1; }
+.weather__temp { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.weather__label { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+
+a.chip { color: inherit; }
+a.chip:hover { border-color: var(--accent); }
