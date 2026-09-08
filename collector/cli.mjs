@@ -11,12 +11,13 @@ import 'dotenv/config';
 import path from 'node:path';
 import { openDatabase, DEFAULT_DB_PATH, taskCounts, usageHistory, callsToday, retryFailed, reopenTasks } from './db.mjs';
 import { Client } from './client.mjs';
-import { estimate, scopeOf, PROFILES } from './plan.mjs';
+import { estimate, scopeOf, seedPlan, expandPlan, PROFILES } from './plan.mjs';
 import { runCollector } from './worker.mjs';
 import { deriveAll } from './derive.mjs';
 import { acquireLock, AlreadyRunning, lockState, lockPath, releaseLock } from './lock.mjs';
 import { parseLeagues, parseSeasons, targetsOf, leagueName, PRESETS } from './leagues.mjs';
 import { exportAll, listTables } from './export.mjs';
+import { preview, clean, reconcile, LEVELS } from './clean.mjs';
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
@@ -55,6 +56,7 @@ BATSCORES - collecteur de donnees
   ligues   Cherche un championnat et son identifiant
   saisons  Liste les saisons disponibles pour un championnat
   export   Exporte toutes les tables en CSV, JSON ou NDJSON
+  nettoyer Remet a zero, du plus sur au plus destructeur
 
 Options :
   --league <ids>      un ou plusieurs championnats : 61 | 61,39,140 | top5
@@ -67,6 +69,8 @@ Options :
   --out <dossier>     export : destination           (defaut : export/)
   --tables <liste>    export : se limiter a ces tables
   --with-raw          export : inclure l'archive brute (volumineuse)
+  --niveau <nom>      nettoyer : derive | taches | tout
+  --oui               nettoyer : confirme la suppression (sans lui, simple apercu)
 
 Ensembles de championnats : ${Object.keys(PRESETS).join(' | ')}
 
@@ -77,6 +81,8 @@ Exemples :
   npm run collect -- run  --league top5 --season 2019-2024 --profile total
   npm run collect -- cotes --league 61 --season 2023   puis   run --profile complet
   npm run collect -- export --format csv --out ~/batscores-csv
+  npm run collect -- nettoyer --niveau taches          # apercu, ne detruit rien
+  npm run collect -- nettoyer --niveau taches --oui    # applique
 
 La derive des cotes se construit avec le temps : chaque passage de "cotes"
 suivi d'un "run" ajoute un point a la courbe. Un seul releve n'en trace aucune.
@@ -279,6 +285,105 @@ async function main() {
       ? scopes.reduce((total, scope) => total + retryFailed(db, scope), 0)
       : retryFailed(db);
     console.log(`${n} tache(s) remise(s) en file.`);
+    return undefined;
+  }
+
+  if (command === 'nettoyer') {
+    const niveau = String(opts.niveau || opts.level || '').toLowerCase();
+    if (!LEVELS[niveau]) {
+      console.log('\nRemise a zero du collecteur — trois niveaux :\n');
+      for (const [nom, info] of Object.entries(LEVELS)) {
+        console.log(`  --niveau ${nom}`);
+        console.log(`    ${info.describe}`);
+        console.log(`    Cout : ${info.cost}\n`);
+      }
+      console.log('Sans --oui, la commande affiche seulement ce qu\'elle effacerait.\n');
+      return undefined;
+    }
+
+    let plan;
+    try {
+      plan = preview(db, niveau);
+    } catch (err) {
+      console.error(`Erreur : ${err.message}`);
+      process.exit(1);
+    }
+
+    console.log(`\nNettoyage — ${plan.label}\n`);
+    console.log(`  ${plan.describe}`);
+    console.log(`  Cout : ${plan.cost}\n`);
+
+    if (!plan.tables.length) {
+      console.log('  Rien a effacer : ces tables sont deja vides.\n');
+      return undefined;
+    }
+
+    console.log('  Serait efface :');
+    for (const { table, rows } of plan.tables) {
+      console.log(`    ${table.padEnd(24)} ${fmt(rows)} ligne(s)`);
+    }
+    console.log(`    ${'TOTAL'.padEnd(24)} ${fmt(plan.total)} ligne(s)`);
+
+    if (plan.archiveKept && plan.archivedResponses) {
+      console.log(`\n  Conserve : ${fmt(plan.archivedResponses)} reponse(s) brute(s) archivee(s).`);
+      console.log('  Ce sont vos appels deja payes : ils ne seront pas redepenses.');
+    }
+
+    if (!opts.oui) {
+      console.log('\n  Apercu seulement. Pour appliquer :');
+      console.log(`    npm run collect -- nettoyer --niveau ${niveau} --oui\n`);
+      return undefined;
+    }
+
+    if (niveau === 'tout') {
+      // Le seul niveau qui detruit des appels payes merite un avertissement
+      // qu'on ne peut pas ne pas lire.
+      console.log(`\n  ATTENTION : ${fmt(plan.archivedResponses)} reponse(s) archivee(s) vont etre detruites.`);
+      console.log('  Elles representent autant d\'appels payes, a redepenser entierement.');
+      console.log('  Pour repartir proprement SANS ce cout : --niveau taches\n');
+    }
+
+    const verrou = lockState(opts.db || DEFAULT_DB_PATH);
+    if (verrou) {
+      console.error(`Erreur : une collecte tourne (processus ${verrou.pid}). Arretez-la avant de nettoyer.\n`);
+      process.exit(1);
+    }
+
+    clean(db, niveau);
+    console.log('\n  Efface.');
+
+    if (niveau === 'taches') {
+      // La file vient d'etre videe : on la reseme et on marque comme faites
+      // les taches dont la reponse est deja en archive.
+      const scopes = db.prepare(
+        "SELECT DISTINCT params_json FROM raw_responses WHERE endpoint = '/fixtures'",
+      ).all();
+      let resemees = 0;
+      for (const row of scopes) {
+        const params = JSON.parse(row.params_json);
+        if (!params.league || !params.season) continue;
+        resemees += seedPlan(db, { league: params.league, season: params.season, profile });
+        resemees += expandPlan(db, { league: params.league, season: params.season, profile });
+      }
+      const reconciliees = reconcile(db);
+      const restantes = taskCounts(db).pending;
+      console.log(`  File resemee depuis l'archive, profil "${profile}" : ${fmt(resemees)} tache(s).`);
+      console.log(`  Dont ${fmt(reconciliees)} deja archivee(s), marquee(s) comme faites.`);
+      console.log('  Aucun appel ne sera redepense pour ces donnees.');
+      if (restantes) {
+        // Ressemer avec un profil plus large que celui d'origine cree des
+        // taches inedites : ce n'est pas un bug, mais il faut le dire.
+        console.log(`\n  ${fmt(restantes)} tache(s) restent en attente : le profil "${profile}" demande`);
+        console.log('  plus que ce qui avait ete collecte. Pour ne rien ajouter, relancez');
+        console.log('  avec le profil d\'origine :  --profile essentiel');
+      }
+      console.log(`\n  Etat : npm run collect -- status`);
+    } else if (niveau === 'derive') {
+      console.log('\n  Reconstruisez les tables :  npm run collect -- derive');
+    } else {
+      console.log('\n  Base vide. Repartez de :  npm run collect -- plan --league top5 --season 2019-2024');
+    }
+    console.log('');
     return undefined;
   }
 

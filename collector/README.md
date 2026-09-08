@@ -80,6 +80,7 @@ collecte entiere de quota.
 | `ligues` | Cherche un championnat et son identifiant |
 | `saisons` | Liste les saisons disponibles et ce que couvre chacune |
 | `export` | Exporte les tables en CSV, JSON ou NDJSON |
+| `nettoyer` | Remet a zero, du plus sur au plus destructeur |
 
 Options : `--league`, `--season`, `--profile`, `--max-calls`, `--db`, `--quiet`.
 
@@ -258,6 +259,53 @@ les tables derivees. `--with-raw` l'inclut.
 
 Depuis la page Collecte, chaque table non vide se telecharge d'un clic, au
 format choisi.
+
+## Repartir proprement
+
+Une base a moitie collectee, avec des taches en echec et un plan qui ne
+correspond plus a ce qu'on veut, est penible a demeler. `nettoyer` permet de
+repartir — mais tout effacer n'est presque jamais ce qu'il faut.
+
+```bash
+npm run collect -- nettoyer                          # explique les trois niveaux
+npm run collect -- nettoyer --niveau taches          # apercu : ne detruit rien
+npm run collect -- nettoyer --niveau taches --oui    # applique
+```
+
+| Niveau | Efface | Conserve | Cout |
+| --- | --- | --- | --- |
+| `derive` | les tables interrogeables | l'archive, la file | aucun appel |
+| `taches` | la file et l'historique | **l'archive** | aucun appel |
+| `tout` | absolument tout | rien | **toute la collecte est a refaire** |
+
+Sans `--oui`, la commande se contente d'afficher ce qu'elle effacerait. Une
+commande destructrice portant sur des donnees payees doit pouvoir etre
+inspectee avant d'etre lancee.
+
+### Pourquoi `taches` ne coute rien
+
+Le collecteur **ne consulte pas l'archive avant d'appeler** : chaque tache
+executee consomme un appel, meme si la reponse est deja en base. Vider la file
+et la ressemer reviendrait donc a repayer l'integralite de la collecte.
+
+`nettoyer --niveau taches` reseme la file depuis l'archive, puis **reconcilie** :
+toute tache dont le couple (endpoint, parametres) figure deja dans
+`raw_responses` est marquee comme faite. On repart sur une file propre en
+sachant ce qui reste reellement a demander.
+
+Un test verifie cette propriete de bout en bout : apres nettoyage et
+reconciliation, une nouvelle collecte consomme **zero appel**.
+
+Ce que cela ne fait pas : rafraichir. Une donnee qui bouge — cotes, pronostics,
+saison en cours — reste sur son dernier releve. Pour la redemander, il faut
+rouvrir explicitement les taches concernees (`cotes`, `retry`).
+
+### Choisir le bon profil au nettoyage
+
+`taches` reseme avec le profil demande (`--profile`, `complet` par defaut).
+Ressemer avec un profil plus large que celui d'origine cree des taches inedites,
+qui restent en attente : ce n'est pas un defaut, mais la commande le signale.
+Pour retrouver exactement l'etat d'avant, passez le profil d'origine.
 
 ## Base de donnees
 

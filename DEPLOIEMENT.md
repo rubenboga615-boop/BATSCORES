@@ -451,6 +451,7 @@ scp batscores@203.0.113.42:~/sauvegardes/batscores-*.db .
 | Certificat absent | `dig +short votre-domaine` renvoie-t-il bien l'IP ? puis `sudo journalctl -u caddy -n 50` |
 | Quota epuise | `npm run collect -- status` : il affiche l'avancement par cible et la raison de l'arret |
 | La collecte semble figee | `npm run collect -- status`, section « Diagnostic » — souvent le quota, ou une file deja terminee |
+| Envie de repartir proprement | `npm run collect -- nettoyer --niveau taches` — garde l'archive, donc ne redepense rien |
 | « Une collecte tourne deja » sans collecte | `npm run collect -- debloquer` ; rien n'est perdu, la reprise repart ou elle en etait |
 | Disque plein | `df -h` ; la base grossit, les journaux PM2 aussi (`pm2 flush`) |
 | Bouton de notification absent | Site en HTTPS ? Cles VAPID dans `.env` ? `pm2 restart batscores` |

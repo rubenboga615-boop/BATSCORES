@@ -353,6 +353,7 @@ collector/
   paths.mjs        chemins des fichiers, sans dependance a node:sqlite
   leagues.mjs      ensembles de championnats, plages de saisons, cibles
   export.mjs       export CSV, JSON et NDJSON de toutes les tables
+  clean.mjs        remise a zero a trois niveaux, sans redepenser le quota
   lock.mjs         verrou partage : une seule collecte a la fois
   db.mjs           acces SQLite, file de taches, comptabilite du quota
   client.mjs       client API : limitation de debit, reprises, archivage brut

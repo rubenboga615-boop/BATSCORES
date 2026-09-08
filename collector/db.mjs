@@ -131,6 +131,35 @@ export function reopenTasks(db, kinds, scope = null) {
   return db.prepare(sql).run(...args).changes;
 }
 
+/**
+ * Marque comme faites les taches dont la reponse est deja archivee.
+ *
+ * Le collecteur ne consulte pas l'archive avant d'appeler : chaque tache
+ * executee coute un appel, meme si la reponse est deja en base. Repartir sur
+ * une file neuve reviendrait donc a repayer l'integralite de ce qui a deja ete
+ * collecte.
+ *
+ * Cette reconciliation regarde, pour chaque tache en attente, si le couple
+ * (endpoint, parametres) figure dans raw_responses. Si oui, la tache est
+ * consideree faite : on possede deja sa reponse.
+ *
+ * Ce que cela ne fait pas : rafraichir. Une donnee qui bouge — cotes,
+ * pronostics, saison en cours — reste figee sur son dernier releve. Pour la
+ * redemander, il faut rouvrir explicitement les taches concernees.
+ *
+ * @returns {number} nombre de taches reconciliees
+ */
+export function reconcileWithArchive(db) {
+  return db.prepare(`
+    UPDATE tasks SET state = 'done', updated_at = ?
+    WHERE state = 'pending'
+      AND EXISTS (
+        SELECT 1 FROM raw_responses r
+        WHERE r.endpoint = tasks.endpoint AND r.params_key = tasks.params_key
+      )
+  `).run(nowIso()).changes;
+}
+
 /* ------------------------------ Archive brute ------------------------------ */
 
 export function saveRaw(db, { endpoint, params, results, payload }) {
