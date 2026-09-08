@@ -420,6 +420,7 @@ scp batscores@203.0.113.42:~/sauvegardes/batscores-*.db .
 | « Cle API refusee » | `.env` contient-il la vraie cle ? `pm2 restart batscores` apres modification |
 | Certificat absent | `dig +short votre-domaine` renvoie-t-il bien l'IP ? puis `sudo journalctl -u caddy -n 50` |
 | Quota epuise | `npm run collect -- status` affiche la consommation du jour |
+| « Une collecte tourne deja » sans collecte | `npm run collect -- debloquer` ; rien n'est perdu, la reprise repart ou elle en etait |
 | Disque plein | `df -h` ; la base grossit, les journaux PM2 aussi (`pm2 flush`) |
 | Bouton de notification absent | Site en HTTPS ? Cles VAPID dans `.env` ? `pm2 restart batscores` |
 | Page Actus vide | `curl -s localhost:3000/api/news \| head` ; une source en panne est nommee dans la reponse |

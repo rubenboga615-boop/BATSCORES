@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Router } from 'express';
 import express from 'express';
+import { lockState, releaseLock } from '../../collector/lock.mjs';
+import { dataDir, logPath } from '../../collector/paths.mjs';
 
 /**
  * Pilotage et supervision du collecteur depuis l'interface web.
@@ -23,13 +25,12 @@ import express from 'express';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(here, '..', '..');
 const CLI = path.join(projectRoot, 'collector', 'cli.mjs');
-// Journal et PID vivent a cote de la base : deplacer COLLECTOR_DB deplace
+// Journal et verrou vivent a cote de la base : deplacer COLLECTOR_DB deplace
 // tout l'etat du collecteur d'un bloc, sans laisser de fichier orphelin.
-const DATA_DIR = process.env.COLLECTOR_DB
-  ? path.dirname(path.resolve(process.env.COLLECTOR_DB))
-  : path.join(projectRoot, 'data');
-const LOG_FILE = path.join(DATA_DIR, 'collector.log');
-const PID_FILE = path.join(DATA_DIR, 'collector.pid');
+// Ces chemins viennent de collector/paths.mjs, qui n'importe pas node:sqlite
+// et reste donc chargeable des Node 20.
+const DATA_DIR = dataDir();
+const LOG_FILE = logPath();
 
 export const collectorRouter = Router();
 collectorRouter.use(express.json({ limit: '8kb' }));
@@ -54,21 +55,14 @@ async function loadCollector() {
 }
 
 /**
- * Le processus enregistre est-il encore vivant ?
+ * Le processus enregistre est-il encore une collecte vivante ?
  *
- * Le meme fichier verrou est pris par la ligne de commande : une collecte
- * lancee au terminal est donc vue ici, et le bouton "Lancer" la refusera.
+ * La reponse vient de collector/lock.mjs, partage avec la ligne de commande :
+ * une collecte lancee au terminal est donc vue ici, et le bouton "Lancer" la
+ * refusera. Cette regle a longtemps ete dupliquee ici dans sa propre version,
+ * plus simple et fausse de la meme facon. Une seule regle, un seul endroit.
  */
-function runningPid() {
-  try {
-    const pid = Number(fs.readFileSync(PID_FILE, 'utf8').trim());
-    if (!Number.isInteger(pid) || pid <= 0) return null;
-    process.kill(pid, 0); // ne tue rien : teste seulement l'existence
-    return pid;
-  } catch {
-    return null;
-  }
-}
+const runningPid = () => lockState()?.pid ?? null;
 
 /** Refuse l'action si le pilotage n'est pas explicitement active. */
 function requireToken(req, res) {
@@ -248,7 +242,10 @@ collectorRouter.post('/start', async (req, res, next) => {
     });
     child.unref();
     fs.closeSync(out);
-    fs.writeFileSync(PID_FILE, String(child.pid));
+    // On n'ecrit surtout PAS le verrou ici. C'est l'enfant qui le prend, et
+    // le lui poser d'avance le faisait se voir lui-meme : il refusait alors
+    // de demarrer en annoncant qu'une collecte tournait deja — avec son
+    // propre numero de processus.
 
     return res.status(202).json({ started: true, pid: child.pid, league, season, profile, maxCalls });
   } catch (err) {
@@ -270,6 +267,11 @@ collectorRouter.post('/stop', (req, res) => {
   }
   // L'etat vit en base : une interruption ne perd rien, la reprise repartira
   // de la premiere tache en attente.
-  try { fs.unlinkSync(PID_FILE); } catch { /* deja disparu */ }
+  //
+  // Le processus libere normalement son verrou en recevant SIGTERM ; ce
+  // filet ne sert qu'au cas ou il meurt avant. On verifie que le verrou
+  // designe toujours ce processus, pour ne pas effacer celui d'une collecte
+  // relancee entre-temps.
+  if (lockState()?.pid === pid) releaseLock();
   return res.json({ stopped: true, pid });
 });

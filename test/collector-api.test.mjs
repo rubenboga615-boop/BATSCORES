@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnServer } from './spawn-server.mjs';
+import { startSeasonMock } from './mock-season.mjs';
 
 const tempDb = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'batscores-')), 'test.db');
 const hasSqlite = await import('node:sqlite').then(() => true, () => false);
@@ -154,6 +155,62 @@ describe('estimation depuis l\'interface', () => {
       return undefined;
     } finally {
       await app.close();
+    }
+  });
+});
+
+/**
+ * Lancement reel depuis l'interface.
+ *
+ * Ce chemin n'etait couvert par aucun test — le jeton de pilotage etant absent
+ * partout ailleurs, le bouton "Lancer" n'avait jamais ete exerce de bout en
+ * bout. C'est precisement la qu'un defaut s'est loge : la route deposait le
+ * verrou au nom du processus qu'elle venait de lancer, et ce processus, en
+ * voulant le prendre, se voyait lui-meme. Il refusait alors de demarrer en
+ * annoncant qu'une collecte tournait deja, avec son propre numero.
+ */
+describe('lancement depuis la page Collecte', () => {
+  test('la collecte lancee demarre vraiment, sans se bloquer elle-meme', async (t) => {
+    if (!hasSqlite) return t.skip('node:sqlite requiert Node 22 ou superieur');
+
+    const mock = await startSeasonMock();
+    const db = tempDb();
+    const app = await spawnServer({
+      API_FOOTBALL_KEY: 'cle-de-test',
+      API_FOOTBALL_BASE_URL: mock.url,
+      COLLECTOR_DB: db,
+      COLLECTOR_ADMIN_TOKEN: 'jeton',
+    });
+
+    try {
+      const { status, body } = await post(app, '/api/collector/start', {
+        league: 61, season: 2023, profile: 'essentiel', maxCalls: 1,
+      }, 'jeton');
+      assert.equal(status, 202);
+      assert.ok(body.pid, 'un processus doit avoir ete lance');
+
+      // La route ne doit pas avoir depose le verrou : c'est l'enfant qui le prend.
+      const lock = path.join(path.dirname(db), 'collector.pid');
+      assert.equal(fs.existsSync(lock), false, 'le verrou appartient au processus lance');
+
+      // On attend que l'enfant ecrive quelque chose dans le journal.
+      const logFile = path.join(path.dirname(db), 'collector.log');
+      let contenu = '';
+      for (let i = 0; i < 60 && !contenu.trim(); i += 1) {
+        await new Promise((r) => setTimeout(r, 100));
+        contenu = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+      }
+
+      assert.ok(contenu.trim(), 'la collecte doit produire un journal');
+      assert.ok(
+        !/tourne deja/.test(contenu),
+        `la collecte s'est bloquee elle-meme :\n${contenu.slice(0, 400)}`,
+      );
+      assert.match(contenu, /Collecte/, 'le journal doit montrer une collecte qui demarre');
+      return undefined;
+    } finally {
+      await app.close();
+      await mock.close();
     }
   });
 });

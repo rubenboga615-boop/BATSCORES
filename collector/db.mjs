@@ -13,8 +13,13 @@ import { DatabaseSync } from 'node:sqlite';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA = path.join(here, 'schema.sql');
 
-export const DEFAULT_DB_PATH = process.env.COLLECTOR_DB
-  || path.join(here, '..', 'data', 'batscores.db');
+// Le chemin est defini dans paths.mjs, qui n'importe pas node:sqlite : le
+// verrou et la page Collecte peuvent ainsi le lire depuis Node 20. Il est
+// importe puis reexporte, car un simple `export ... from` ne creerait pas de
+// liaison locale — et openDatabase s'en sert comme valeur par defaut.
+import { DEFAULT_DB_PATH } from './paths.mjs';
+
+export { DEFAULT_DB_PATH };
 
 export function openDatabase(dbPath = DEFAULT_DB_PATH) {
   if (dbPath !== ':memory:') {

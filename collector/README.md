@@ -44,6 +44,7 @@ npm run collect -- status
 | `status` | File d'attente, quota consomme, volumetrie de la base |
 | `retry` | Remet les taches en echec dans la file |
 | `cotes` | Rouvre le releve des cotes pour en refaire un et tracer la derive |
+| `debloquer` | Leve un verrou laisse par une collecte interrompue |
 
 Options : `--league`, `--season`, `--profile`, `--max-calls`, `--db`, `--quiet`.
 
@@ -90,6 +91,30 @@ deux processus pourraient prendre la meme tache.
 
 Un verrou laisse par un processus disparu (machine redemarree en pleine
 collecte) est ignore automatiquement.
+
+### « Une collecte tourne deja » alors que rien ne tourne
+
+Le verrou est un fichier `collector.pid` depose a cote de la base. Il enregistre
+le numero du processus **et son empreinte**, car tester le seul numero ne suffit
+pas : l'espace des PID fait 32 768 valeurs et Android les recycle vite. Apres un
+arret brutal — batterie, veille, terminal ferme — le numero laisse dans le
+fichier peut avoir ete repris par un tout autre programme, et le verrou
+paraissait alors detenu pour toujours.
+
+Un numero recycle est desormais reconnu et ignore. Si le doute subsiste — sur un
+systeme sans `/proc`, ou avec un verrou d'ancienne version — la commande de
+sortie est explicite :
+
+```bash
+npm run collect -- debloquer
+```
+
+Elle refuse de lever un verrou dont elle a pu confirmer qu'il appartient a une
+collecte reellement en cours ; `--force` passe outre, au risque de faire tourner
+deux collectes sur la meme base et de consommer le quota deux fois.
+
+Rien n'est perdu en levant un verrou : tout l'etat vit en base, la reprise
+repart de la premiere tache en attente.
 
 ## Profils
 

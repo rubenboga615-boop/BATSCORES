@@ -13,7 +13,7 @@ import { Client } from './client.mjs';
 import { estimate, scopeOf, PROFILES } from './plan.mjs';
 import { runCollector } from './worker.mjs';
 import { deriveAll } from './derive.mjs';
-import { acquireLock, AlreadyRunning } from './lock.mjs';
+import { acquireLock, AlreadyRunning, lockState, lockPath, releaseLock } from './lock.mjs';
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
@@ -48,6 +48,7 @@ BATSCORES - collecteur de donnees
   status   Etat de la file, du quota et de la base
   retry    Remet les taches en echec dans la file
   cotes    Rouvre le releve des cotes pour en refaire un (trace la derive)
+  debloquer Leve un verrou laisse par une collecte interrompue
 
 Options :
   --league <id>       identifiant de competition (61 = Ligue 1)
@@ -135,6 +136,7 @@ async function main() {
     } catch (err) {
       if (err instanceof AlreadyRunning) {
         console.error(`\nErreur : ${err.message}\n`);
+        console.error(`  verrou : ${lockPath(opts.db || DEFAULT_DB_PATH)}\n`);
         process.exit(1);
       }
       throw err;
@@ -184,6 +186,34 @@ async function main() {
       : null;
     const n = retryFailed(db, scope);
     console.log(`${n} tache(s) remise(s) en file.`);
+    return undefined;
+  }
+
+  if (command === 'debloquer') {
+    const dbPath = opts.db || DEFAULT_DB_PATH;
+    const state = lockState(dbPath);
+
+    if (!state) {
+      // Le fichier peut exister sans designer de collecte vivante : on le
+      // retire quand meme, sinon la commande ne servirait a rien dans le seul
+      // cas ou l'on en a besoin.
+      releaseLock(dbPath);
+      console.log('Aucun verrou actif. Vous pouvez relancer une collecte.');
+      return undefined;
+    }
+
+    if (state.certain && !opts.force) {
+      console.error(`\nUne collecte tourne reellement (processus ${state.pid}).`);
+      console.error('Lever le verrou ferait tourner deux collectes sur la meme base,');
+      console.error('et consommerait le quota deux fois.\n');
+      console.error('Pour l\'arreter proprement :  kill ' + state.pid);
+      console.error('Pour passer outre malgre tout :  npm run collect -- debloquer --force\n');
+      process.exit(1);
+    }
+
+    releaseLock(dbPath);
+    console.log(`Verrou leve (il designait le processus ${state.pid}).`);
+    console.log('Rien n\'est perdu : la reprise repartira de la premiere tache en attente.');
     return undefined;
   }
 
