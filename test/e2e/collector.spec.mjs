@@ -20,8 +20,10 @@ test.describe('page Collecte', () => {
   });
 
   test('liste les competitions collectees et le contenu de la base', async ({ page }) => {
+    // Le serveur envoie le nom du championnat : l'interface n'a pas à afficher
+    // « competition 61 » ni à dupliquer la table des identifiants.
     await expect(page.locator('.card').filter({ hasText: 'Competitions collectees' }))
-      .toContainText('Competition 61 · saison 2023');
+      .toContainText('Ligue 1 · saison 2023');
     await expect(page.locator('.card').filter({ hasText: 'Contenu de la base' }))
       .toContainText('Reponses brutes archivees');
   });
@@ -65,5 +67,70 @@ test.describe('page Collecte', () => {
     await lien.click();
     await expect(page).toHaveURL(/#\/collecte/);
     await expect(page.locator('.card').first()).toBeVisible();
+  });
+});
+
+test.describe('collecte multi-championnats', () => {
+  test('un ensemble se choisit d\'un geste et se chiffre', async ({ page }) => {
+    await page.goto('/#/collecte');
+    await page.waitForSelector('#col-league');
+
+    // Les identifiants d'API-Football ne sont pas devinables : les ensembles
+    // évitent d'avoir à les chercher.
+    await page.click('text=Top 5 · 5 dernieres saisons');
+    await expect(page.locator('#col-league')).toHaveValue('top5');
+    await expect(page.locator('#col-season')).toHaveValue(/\d{4}-\d{4}/);
+
+    await page.click('#col-plan');
+    await page.waitForSelector('text=appels estimes');
+    const carte = page.locator('.card').filter({ hasText: 'Lancer une collecte' });
+    // Cinq championnats sur cinq saisons doivent coûter bien plus qu'une seule.
+    await expect(carte).toContainText('appels estimes');
+  });
+
+  test('une saisie libre est acceptée : listes et plages', async ({ page }) => {
+    await page.goto('/#/collecte');
+    await page.waitForSelector('#col-league');
+    await page.fill('#col-league', '61,39');
+    await page.fill('#col-season', '2022-2023');
+    await page.click('#col-plan');
+    await page.waitForSelector('text=appels estimes');
+    await expect(page.locator('.card').filter({ hasText: 'Lancer une collecte' }))
+      .not.toContainText('Estimation impossible');
+  });
+
+  test('une saisie fautive est refusée avec sa raison', async ({ page }) => {
+    await page.goto('/#/collecte');
+    await page.waitForSelector('#col-league');
+    await page.fill('#col-league', 'premier-league');
+    await page.fill('#col-season', '2023');
+    await page.click('#col-plan');
+    // Se tromper de compétition coûterait des appels payés : l'erreur doit
+    // être visible, pas corrigée en silence.
+    await expect(page.locator('#collector-body')).toContainText('Championnat inconnu');
+  });
+});
+
+test.describe('export de la base', () => {
+  test('les tables non vides sont proposées au téléchargement', async ({ page }) => {
+    await page.goto('/#/collecte');
+    await page.waitForSelector('[data-export]');
+    const carte = page.locator('.card').filter({ hasText: 'EXPORTER' });
+    await expect(carte).toContainText('aucun appel');
+    await expect(page.locator('[data-export="fixtures"]')).toBeVisible();
+  });
+
+  test('le CSV servi porte un en-tête et un nom de fichier', async ({ request }) => {
+    const response = await request.get('/api/collector/export?table=fixtures&format=csv');
+    expect(response.ok()).toBeTruthy();
+    expect(response.headers()['content-disposition']).toContain('fixtures.csv');
+    const texte = await response.text();
+    expect(texte.split('\n')[0]).toContain('id,');
+    expect(texte.split('\n')[0]).toContain('goals_home');
+  });
+
+  test('une table inconnue est refusée', async ({ request }) => {
+    const response = await request.get('/api/collector/export?table=sqlite_master&format=csv');
+    expect(response.status()).toBe(404);
   });
 });

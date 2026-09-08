@@ -10,28 +10,56 @@ import {
   nextTasks, markTask, taskCounts, enqueue, paramsKey,
   startRun, finishRun, callsToday,
 } from './db.mjs';
-import { seedPlan, expandPlan, scopeOf, allowedKinds } from './plan.mjs';
+import { seedPlan, expandPlan, allowedKinds } from './plan.mjs';
+
+/**
+ * Normalise la demande : une cible unique ou une liste, meme traitement.
+ *
+ * Collecter cinq championnats sur six saisons n'est pas un cas particulier,
+ * c'est le cas normal d'une base historique. Garder `league`/`season` au
+ * singulier evite de casser les appels existants.
+ */
+function targetsOf({ targets, league, season }) {
+  if (Array.isArray(targets) && targets.length) return targets;
+  if (Number.isInteger(league) && Number.isInteger(season)) return [{ league, season }];
+  throw new Error('Aucune cible : precisez au moins un championnat et une saison.');
+}
+
+/** Libelle compact d'un lot de cibles, pour le journal des executions. */
+export function describeTargets(targets) {
+  const leagues = [...new Set(targets.map((t) => t.league))];
+  const seasons = [...new Set(targets.map((t) => t.season))].sort((a, b) => a - b);
+  const shorten = (list) => (list.length > 4
+    ? `${list.slice(0, 3).join(',')}+${list.length - 3}`
+    : list.join(','));
+  return `league:${shorten(leagues)}|season:${shorten(seasons)}`;
+}
 
 /**
  * @param {object} options
  * @param {import('node:sqlite').DatabaseSync} options.db
  * @param {Client} options.client
- * @param {number} options.league
- * @param {number} options.season
+ * @param {Array<{league: number, season: number}>} [options.targets]
+ * @param {number} [options.league]  raccourci pour une cible unique
+ * @param {number} [options.season]  raccourci pour une cible unique
  * @param {string} [options.profile]
  * @param {number} [options.maxCalls]  plafond d'appels pour CETTE execution
  * @param {(msg: string) => void} [options.log]
  */
 export async function runCollector({
-  db, client, league, season, profile = 'complet', maxCalls = Infinity, log = () => {},
+  db, client, targets, league, season,
+  profile = 'complet', maxCalls = Infinity, log = () => {},
 }) {
-  const scope = scopeOf(league, season);
+  const plan = targetsOf({ targets, league, season });
+  const scope = describeTargets(plan);
 
   // Le collecteur est autonome : il cree son plan de depart s'il n'existe pas
   // encore, puis l'etend au fil des donnees. Les deux operations sont
   // idempotentes, une reprise ne recree donc aucune tache.
-  seedPlan(db, { league, season, profile });
-  expandPlan(db, { league, season, profile });
+  for (const target of plan) {
+    seedPlan(db, { ...target, profile });
+    expandPlan(db, { ...target, profile });
+  }
 
   const runId = startRun(db, { scope, profile });
   const startCalls = client.callsThisRun;
@@ -48,7 +76,9 @@ export async function runCollector({
   const summarise = () => {
     const calls = client.callsThisRun - startCalls;
     finishRun(db, runId, { calls, tasksDone: done, tasksFailed: failed, stopReason });
-    return { done, failed, calls, stopReason, counts: taskCounts(db, scope), callsToday: callsToday(db) };
+    // Le decompte porte sur la file entiere, pas sur un seul perimetre : avec
+    // plusieurs cibles, un compte par perimetre ne dirait rien de l'avancement.
+    return { done, failed, calls, stopReason, counts: taskCounts(db), callsToday: callsToday(db) };
   };
 
   try {
@@ -58,7 +88,10 @@ export async function runCollector({
       if (!batch.length) {
         // Plus rien en attente : de nouvelles taches ont-elles pu naitre des
         // donnees fraichement collectees (rencontres, equipes, joueurs) ?
-        const created = expandPlan(db, { league, season, profile });
+        // Chaque cible est reexaminee : le calendrier d'un championnat vient
+        // d'arriver, ses rencontres deviennent autant de taches.
+        let created = 0;
+        for (const target of plan) created += expandPlan(db, { ...target, profile });
         if (created === 0) break;
         log(`  + ${created} nouvelle(s) tache(s) issue(s) des donnees collectees`);
         continue;
@@ -80,7 +113,13 @@ export async function runCollector({
           if (paging && paging.total > (params.page || 1)) {
             const nextPage = { ...params, page: (params.page || 1) + 1 };
             enqueue(db, {
-              kind: task.kind, endpoint: task.endpoint, params: nextPage, scope, priority: task.priority,
+              kind: task.kind,
+              endpoint: task.endpoint,
+              params: nextPage,
+              // Le perimetre de la page suivante est celui de la tache dont
+              // elle decoule, pas celui du lot en cours d'execution.
+              scope: task.scope,
+              priority: task.priority,
             });
           }
 

@@ -26,15 +26,47 @@ d'appels.
 ## Utilisation
 
 ```bash
+# 0. Trouver un championnat, voir ses saisons disponibles
+npm run collect -- ligues                       # les ensembles connus, sans appel
+npm run collect -- ligues --search "premier"    # 1 appel
+npm run collect -- saisons --league 61          # 1 appel, dit ce que couvre chaque saison
+
 # 1. Chiffrer le cout AVANT de depenser du quota
-npm run collect -- plan --league 61 --season 2023 --profile complet
+npm run collect -- plan --league top5 --season 2019-2024 --profile total
 
 # 2. Lancer (ou reprendre) la collecte
-npm run collect -- run --league 61 --season 2023 --profile complet
+npm run collect -- run --league top5 --season 2019-2024 --profile total
 
-# 3. Consulter l'etat
+# 3. Consulter l'etat, et savoir pourquoi ca n'avance pas
 npm run collect -- status
+
+# 4. Recuperer les donnees
+npm run collect -- export --format csv --out ~/batscores-csv
 ```
+
+### Choisir les championnats et les saisons
+
+`--league` et `--season` acceptent bien plus qu'une valeur :
+
+| Ecriture | Signification |
+| --- | --- |
+| `--league 61` | un championnat |
+| `--league 61,39,140` | une liste |
+| `--league top5` | un ensemble nomme |
+| `--season 2023` | une saison |
+| `--season 2021,2023` | une liste |
+| `--season 2019-2024` | une plage, bornes comprises (6 saisons) |
+
+Ensembles disponibles : `top5`, `coupes`, `top5+coupes`, `deuxiemes`, `europe`,
+`monde`. `npm run collect -- ligues` les affiche avec leurs identifiants.
+
+Les cibles sont parcourues **saison par saison**, pas championnat par
+championnat : une collecte interrompue par le quota laisse ainsi des saisons
+completes plutot que cinq championnats a moitie faits.
+
+Une saisie fautive est refusee avec sa raison plutot que corrigee en silence.
+Se tromper de competition ne coute pas un message d'erreur, cela coute une
+collecte entiere de quota.
 
 | Commande | Role |
 | --- | --- |
@@ -45,6 +77,9 @@ npm run collect -- status
 | `retry` | Remet les taches en echec dans la file |
 | `cotes` | Rouvre le releve des cotes pour en refaire un et tracer la derive |
 | `debloquer` | Leve un verrou laisse par une collecte interrompue |
+| `ligues` | Cherche un championnat et son identifiant |
+| `saisons` | Liste les saisons disponibles et ce que couvre chacune |
+| `export` | Exporte les tables en CSV, JSON ou NDJSON |
 
 Options : `--league`, `--season`, `--profile`, `--max-calls`, `--db`, `--quiet`.
 
@@ -91,6 +126,26 @@ deux processus pourraient prendre la meme tache.
 
 Un verrou laisse par un processus disparu (machine redemarree en pleine
 collecte) est ignore automatiquement.
+
+### « La collecte n'avance pas »
+
+`npm run collect -- status` repond directement. Il affiche l'avancement **par
+cible**, la derniere execution avec sa raison d'arret, et un diagnostic en
+clair : quota du jour epuise, file terminee, derivation jamais lancee, taches
+en echec.
+
+Trois causes reviennent :
+
+- **Le quota.** Collecter les cinq grands championnats sur six saisons en
+  profil `total` represente environ 100 000 appels, soit une quinzaine de jours
+  a 7 500 appels par jour. Ce n'est pas un blocage, c'est un rationnement :
+  relancez la meme commande chaque jour, la reprise repart ou elle s'est
+  arretee.
+- **La file est vide.** Toutes les cibles semees sont faites. Pour aller plus
+  loin, il faut ajouter des championnats ou des saisons — le collecteur ne
+  devine pas ce qu'on ne lui a pas demande.
+- **La derivation n'a pas tourne.** L'archive se remplit mais les tables
+  restent vides. `npm run collect -- derive` les reconstruit, sans aucun appel.
 
 ### « Une collecte tourne deja » alors que rien ne tourne
 
@@ -175,6 +230,34 @@ Ordre de grandeur pour un historique : **10 saisons d'un championnat en profil
 `complet` coutent environ 16 000 appels, soit un peu plus de deux jours de
 quota.** Cinq championnats sur dix ans depassent la semaine. Lancez-le sur le
 VPS, pas sur un poste que vous eteignez.
+
+## Exporter
+
+La base SQLite est deja un format ouvert. Mais « ouvrable dans un tableur » et
+« chargeable dans pandas » comptent autant, et personne ne devrait avoir a
+ecrire du SQL pour recuperer ce qu'il a paye.
+
+```bash
+npm run collect -- export --format csv    --out ~/batscores-csv
+npm run collect -- export --format ndjson --out ~/batscores-json
+npm run collect -- export --tables fixtures,fixture_events --out ~/extrait
+npm run collect -- export --with-raw --out ~/tout      # archive brute comprise
+```
+
+| Format | Usage |
+| --- | --- |
+| `csv` | tableur, R — un fichier par table, echappement RFC 4180 |
+| `json` | script — un tableau complet par table |
+| `ndjson` | gros volumes — une ligne JSON par enregistrement, lisible en flux |
+
+Un `manifeste.json` accompagne l'export : date, format, nombre de lignes par
+table. Un dossier de fichiers sans contexte vieillit mal.
+
+L'archive brute est exclue par defaut : elle est volumineuse et redondante avec
+les tables derivees. `--with-raw` l'inclut.
+
+Depuis la page Collecte, chaque table non vide se telecharge d'un clic, au
+format choisi.
 
 ## Base de donnees
 

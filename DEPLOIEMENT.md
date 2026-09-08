@@ -262,12 +262,23 @@ serveur.
 cd ~/BATSCORES
 npm ci                       # cette fois avec les outils, le collecteur en a besoin
 
+# Voir ce que votre abonnement couvre, sans rien engager
+npm run collect -- saisons --league 61
+
 # Chiffrer avant de depenser : cette commande ne consomme aucun appel
-npm run collect -- plan --league 61 --season 2025 --profile complet
+npm run collect -- plan --league top5 --season 2019-2024 --profile total
 
 # Collecter
-npm run collect -- run --league 61 --season 2025 --profile complet
+npm run collect -- run --league top5 --season 2019-2024 --profile total
+
+# Savoir ou on en est, et pourquoi
+npm run collect -- status
 ```
+
+`--league` accepte un ensemble (`top5`), une liste (`61,39,140`) ou un seul
+identifiant ; `--season` accepte une plage (`2019-2024`). Une collecte large se
+compte en jours de quota : `plan` vous le dit avant que vous ne depensiez quoi
+que ce soit.
 
 ### Automatiser le releve des cotes
 
@@ -379,7 +390,26 @@ chaque rencontre et les affichera directement. Elle accepte plusieurs formes
 de reponse : un tableau, ou un objet contenant `response`, `items`, `results`
 ou `data`.
 
-## 12. Sauvegarder
+## 12. Recuperer vos donnees
+
+Tout ce que vous avez collecte s'exporte, sans consommer d'appel :
+
+```bash
+cd ~/BATSCORES
+npm run collect -- export --format csv --out ~/batscores-csv
+```
+
+Puis rapatriez le dossier sur votre machine :
+
+```bash
+scp -r batscores@203.0.113.42:~/batscores-csv .
+```
+
+Le CSV s'ouvre dans un tableur. Pour un script, `--format ndjson` donne une
+ligne JSON par enregistrement, lisible sans tout charger en memoire. Depuis la
+page **Collecte**, chaque table se telecharge aussi d'un clic.
+
+## 13. Sauvegarder
 
 Ce qui a de la valeur, c'est la base collectee : elle represente des milliers
 d'appels payes.
@@ -412,14 +442,15 @@ scp batscores@203.0.113.42:~/sauvegardes/batscores-*.db .
 
 ---
 
-## 13. En cas de panne
+## 14. En cas de panne
 
 | Symptome | Verifier |
 | --- | --- |
 | Le site ne repond pas | `pm2 status` puis `pm2 logs batscores` |
 | « Cle API refusee » | `.env` contient-il la vraie cle ? `pm2 restart batscores` apres modification |
 | Certificat absent | `dig +short votre-domaine` renvoie-t-il bien l'IP ? puis `sudo journalctl -u caddy -n 50` |
-| Quota epuise | `npm run collect -- status` affiche la consommation du jour |
+| Quota epuise | `npm run collect -- status` : il affiche l'avancement par cible et la raison de l'arret |
+| La collecte semble figee | `npm run collect -- status`, section « Diagnostic » — souvent le quota, ou une file deja terminee |
 | « Une collecte tourne deja » sans collecte | `npm run collect -- debloquer` ; rien n'est perdu, la reprise repart ou elle en etait |
 | Disque plein | `df -h` ; la base grossit, les journaux PM2 aussi (`pm2 flush`) |
 | Bouton de notification absent | Site en HTTPS ? Cles VAPID dans `.env` ? `pm2 restart batscores` |

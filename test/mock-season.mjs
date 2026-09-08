@@ -17,10 +17,18 @@ const TEAMS = [
 const LEAGUE = 61;
 const SEASON = 2023;
 
-/** Calendrier aller-retour : n * (n - 1) rencontres. */
-function buildFixtures() {
+/**
+ * Calendrier aller-retour : n * (n - 1) rencontres.
+ *
+ * Les identifiants dependent du championnat et de la saison demandes. Un faux
+ * fournisseur qui renverrait les memes rencontres pour toutes les competitions
+ * laisserait passer un collecteur confondant ses perimetres : les taches se
+ * dedoubleraient au lieu de se cumuler, et la collecte paraitrait complete
+ * alors qu'une seule cible aurait ete traitee.
+ */
+function buildFixtures(league = LEAGUE, season = SEASON) {
   const fixtures = [];
-  let id = 900000;
+  let id = (league * 1000 + (season - 2000)) * 100;
   let round = 1;
   for (const home of TEAMS) {
     for (const away of TEAMS) {
@@ -39,7 +47,7 @@ function buildFixtures() {
           venue: { id: 2000 + home.id, name: `Stade ${home.name}`, city: 'Ville' },
           status: { long: 'Match Finished', short: 'FT', elapsed: 90, extra: null },
         },
-        league: { id: LEAGUE, name: 'Ligue 1', country: 'France', logo: null, flag: null, season: SEASON, round: `Regular Season - ${round}` },
+        league: { id: league, name: 'Ligue 1', country: 'France', logo: null, flag: null, season, round: `Regular Season - ${round}` },
         teams: {
           home: { id: home.id, name: home.name, logo: null, winner: goalsHome > goalsAway },
           away: { id: away.id, name: away.name, logo: null, winner: goalsAway > goalsHome },
@@ -59,7 +67,25 @@ function buildFixtures() {
 }
 
 const FIXTURES = buildFixtures();
+
+/** Calendriers construits a la demande, memorises par competition et saison. */
+const calendars = new Map([[`${LEAGUE}/${SEASON}`, FIXTURES]]);
+function calendarOf(league, season) {
+  const key = `${league}/${season}`;
+  if (!calendars.has(key)) calendars.set(key, buildFixtures(league, season));
+  return calendars.get(key);
+}
+
 const fixtureById = new Map(FIXTURES.map((f) => [f.fixture.id, f]));
+/** Une rencontre est retrouvable quel que soit le calendrier qui l'a produite. */
+function findFixture(id) {
+  if (fixtureById.has(id)) return fixtureById.get(id);
+  for (const list of calendars.values()) {
+    const found = list.find((f) => f.fixture.id === id);
+    if (found) return found;
+  }
+  return null;
+}
 
 const playerId = (teamId, n) => teamId * 100 + n;
 
@@ -83,8 +109,11 @@ const ENDPOINTS = {
 
   '/fixtures': (p) => {
     if (p.get('id')) {
-      const f = fixtureById.get(Number(p.get('id')));
+      const f = findFixture(Number(p.get('id')));
       return f ? [f] : [];
+    }
+    if (p.get('league') && p.get('season')) {
+      return calendarOf(Number(p.get('league')), Number(p.get('season')));
     }
     return FIXTURES;
   },
@@ -92,7 +121,7 @@ const ENDPOINTS = {
   '/fixtures/rounds': () => Array.from({ length: 10 }, (_, i) => `Regular Season - ${i + 1}`),
 
   '/fixtures/events': (p) => {
-    const f = fixtureById.get(Number(p.get('fixture')));
+    const f = findFixture(Number(p.get('fixture')));
     if (!f) return [];
     const events = [];
     for (let i = 0; i < f.goals.home; i += 1) {
@@ -124,7 +153,7 @@ const ENDPOINTS = {
   },
 
   '/fixtures/lineups': (p) => {
-    const f = fixtureById.get(Number(p.get('fixture')));
+    const f = findFixture(Number(p.get('fixture')));
     if (!f) return [];
     const side = (team, formation) => ({
       team: { id: team.id, name: team.name, logo: null, colors: { player: { primary: 'ffffff' } } },
@@ -141,7 +170,7 @@ const ENDPOINTS = {
   },
 
   '/fixtures/statistics': (p) => {
-    const f = fixtureById.get(Number(p.get('fixture')));
+    const f = findFixture(Number(p.get('fixture')));
     if (!f) return [];
     const side = (team, poss) => ({
       team: { id: team.id, name: team.name },
@@ -156,7 +185,7 @@ const ENDPOINTS = {
   },
 
   '/fixtures/players': (p) => {
-    const f = fixtureById.get(Number(p.get('fixture')));
+    const f = findFixture(Number(p.get('fixture')));
     if (!f) return [];
     const side = (team) => ({
       team: { id: team.id, name: team.name },
@@ -249,6 +278,24 @@ const ENDPOINTS = {
     update: '2024-01-01',
     transfers: [{ date: '2023-07-01', type: 'Free', teams: { in: { id: Number(p.get('team')) }, out: { id: 99 } } }],
   }]),
+
+  // Referentiels : collectes une fois pour toutes. Les omettre ici ferait
+  // echouer trois taches a chaque collecte, et masquerait qu'elles existent.
+  '/countries': () => ([
+    { name: 'France', code: 'FR', flag: 'https://media.example/fr.svg' },
+    { name: 'England', code: 'GB', flag: 'https://media.example/gb.svg' },
+  ]),
+
+  '/odds/bookmakers': () => ([
+    { id: 8, name: 'Bet365' },
+    { id: 6, name: 'Bwin' },
+  ]),
+
+  '/odds/bets': () => ([
+    { id: '1', name: 'Match Winner' },
+    { id: '5', name: 'Goals Over/Under' },
+    { id: '8', name: 'Both Teams Score' },
+  ]),
 
   '/injuries': () => ([{
     player: { id: playerId(85, 3), name: 'Joueur 85-3', type: 'Missing Fixture', reason: 'Knee Injury' },

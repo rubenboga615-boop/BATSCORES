@@ -11,7 +11,7 @@ const TOKEN_KEY = 'batscores.collector.token';
 
 const state = {
   data: null,
-  form: { league: 61, season: 2023, profile: 'complet', maxCalls: '' },
+  form: { league: 'top5', season: '2023', profile: 'complet', maxCalls: '' },
   plan: null,
   planError: null,
   busy: false,
@@ -43,6 +43,17 @@ function shortDate(iso) {
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
+
+/**
+ * Selections d'un geste. Les identifiants d'API-Football ne sont pas
+ * devinables : proposer les ensembles courants evite d'avoir a les chercher.
+ */
+const PRESETS = [
+  { label: 'Top 5 · saison en cours', leagues: 'top5', seasons: String(new Date().getUTCFullYear() - (new Date().getUTCMonth() >= 6 ? 0 : 1)) },
+  { label: 'Top 5 · 5 dernieres saisons', leagues: 'top5', seasons: `${new Date().getUTCFullYear() - 5}-${new Date().getUTCFullYear() - 1}` },
+  { label: 'Top 5 + coupes europeennes', leagues: 'top5+coupes', seasons: String(new Date().getUTCFullYear() - 1) },
+  { label: 'Ligue 1 seule', leagues: '61', seasons: String(new Date().getUTCFullYear() - 1) },
+];
 
 /** Libelle lisible d'une portee de collecte ("league:61|season:2023"). */
 function scopeLabel(scope) {
@@ -115,7 +126,7 @@ function scopesCard(data) {
       ${data.scopes.map((s) => `
         <div class="list-row" style="cursor:default">
           <div class="list-row__main">
-            <div class="list-row__name">${esc(scopeLabel(s.scope))}</div>
+            <div class="list-row__name">${esc(s.label || scopeLabel(s.scope))}</div>
             <div class="list-row__sub">
               ${fmt(s.done)} faites · ${fmt(s.pending)} en attente${s.failed ? ` · <span style="color:var(--live)">${fmt(s.failed)} en echec</span>` : ''}
             </div>
@@ -155,7 +166,7 @@ function runsCard(data) {
       ${data.runs.map((r) => `
         <div class="list-row" style="cursor:default">
           <div class="list-row__main">
-            <div class="list-row__name">${esc(scopeLabel(r.scope))} · ${esc(r.profile || '')}</div>
+            <div class="list-row__name">${esc(r.label || scopeLabel(r.scope))} · ${esc(r.profile || '')}</div>
             <div class="list-row__sub">
               ${shortDate(r.started_at)} · ${fmt(r.calls)} appels · ${fmt(r.tasks_done)} taches
               ${r.tasks_failed ? ` · <span style="color:var(--live)">${fmt(r.tasks_failed)} en echec</span>` : ''}
@@ -191,19 +202,61 @@ function launchCard(data) {
          </div>`
       : '';
 
+  const exportBlock = data.tables ? `
+    <div class="card">
+      <div class="card__title">Exporter</div>
+      <div class="stat"><div class="stat__label">
+        Telechargez ce que vous avez collecte, table par table. Le CSV s'ouvre
+        dans un tableur, le NDJSON se lit ligne a ligne par un script. Exporter
+        ne consomme aucun appel.
+      </div></div>
+      <div class="stat" style="display:grid;gap:8px">
+        <label class="field">
+          <span>Format</span>
+          <select id="col-format">
+            <option value="csv">CSV — tableur</option>
+            <option value="json">JSON — tableau complet</option>
+            <option value="ndjson">NDJSON — une ligne par enregistrement</option>
+          </select>
+        </label>
+        <div class="chips" style="padding:0">
+          ${Object.entries(data.tables)
+    .filter(([, n]) => n > 0)
+    .map(([name, n]) => `
+            <button class="chip" data-export="${esc(name)}">
+              ${esc(name)} · ${n.toLocaleString('fr-FR')}
+            </button>`).join('') || '<span class="stat__label">Aucune donnee a exporter pour l\'instant.</span>'}
+        </div>
+      </div>
+    </div>` : '';
+
   return `
+    ${exportBlock}
     <div class="card">
       <div class="card__title">Lancer une collecte</div>
       <div class="stat" style="display:grid;gap:10px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <label class="field">
-            <span>Competition</span>
-            <input type="number" id="col-league" value="${esc(form.league)}" inputmode="numeric" />
+            <span>Competitions</span>
+            <input type="text" id="col-league" value="${esc(form.league)}"
+                   placeholder="top5, ou 61,39,140" />
           </label>
           <label class="field">
-            <span>Saison</span>
-            <input type="number" id="col-season" value="${esc(form.season)}" inputmode="numeric" />
+            <span>Saisons</span>
+            <input type="text" id="col-season" value="${esc(form.season)}"
+                   placeholder="2023, ou 2019-2024" />
           </label>
+        </div>
+        <div class="chips" style="padding:0">
+          ${PRESETS.map((preset) => `
+            <button class="chip" data-preset="${esc(preset.leagues)}|${esc(preset.seasons)}">
+              ${esc(preset.label)}
+            </button>`).join('')}
+        </div>
+        <div class="stat__label">
+          Un ensemble ("top5"), une liste ("61,39,140") ou une plage de saisons
+          ("2019-2024"). Estimez toujours avant de lancer : une collecte large
+          se compte en jours de quota.
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <label class="field">
@@ -329,8 +382,10 @@ export async function refreshCollector(root) {
 function readForm(root) {
   const value = (id) => root.querySelector(id)?.value ?? '';
   state.form = {
-    league: Number(value('#col-league')) || 0,
-    season: Number(value('#col-season')) || 0,
+    // Texte et non nombre : "top5" et "2019-2024" sont des selections valides,
+    // que le serveur interprete.
+    league: value('#col-league').trim(),
+    season: value('#col-season').trim(),
     profile: value('#col-profile') || 'complet',
     maxCalls: value('#col-max').trim(),
   };
@@ -341,6 +396,29 @@ export function bindCollectorEvents(root) {
   root.addEventListener('click', async (event) => {
     const body = root.querySelector('#collector-body');
     if (!body) return;
+
+    const exportTable = event.target.closest('[data-export]');
+    if (exportTable) {
+      const format = root.querySelector('#col-format')?.value || 'csv';
+      // Le telechargement passe par une navigation : le navigateur gere le
+      // flux et le nom de fichier, sans charger la table entiere en memoire.
+      window.location.href = `/api/collector/export?table=${
+        encodeURIComponent(exportTable.dataset.export)}&format=${encodeURIComponent(format)}`;
+      return;
+    }
+
+    const preset = event.target.closest('[data-preset]');
+    if (preset) {
+      const [leagues, seasons] = preset.dataset.preset.split('|');
+      root.querySelector('#col-league').value = leagues;
+      root.querySelector('#col-season').value = seasons;
+      // Une selection change le cout : l'ancienne estimation ne vaut plus rien.
+      state.plan = null;
+      state.planError = null;
+      readForm(root);
+      paint(root, state.data, await fetchLog());
+      return;
+    }
 
     if (event.target.closest('#col-plan')) {
       const form = readForm(root);

@@ -410,7 +410,40 @@ function deriveStandings(db) {
 
 /* --------------------------------- Facade --------------------------------- */
 
+/**
+ * Referentiels : pays, bookmakers, types de paris.
+ *
+ * Collectes une fois pour toutes, ils rendent lisible ce qui suit. Sans eux,
+ * la table des cotes ne contient que des numeros.
+ */
+function deriveReferentials(db) {
+  const countries = [];
+  for (const { response } of iterateRaw(db, '/countries')) {
+    for (const item of response) {
+      if (item?.name) countries.push([item.name, item.code ?? null, item.flag ?? null]);
+    }
+  }
+
+  const bookmakers = [];
+  for (const { response } of iterateRaw(db, '/odds/bookmakers')) {
+    for (const item of response) if (item?.id) bookmakers.push([item.id, item.name ?? null]);
+  }
+
+  const bets = [];
+  for (const { response } of iterateRaw(db, '/odds/bets')) {
+    for (const item of response) if (item?.id) bets.push([Number(item.id), item.name ?? null]);
+  }
+
+  return bulk(db, `INSERT INTO countries (name, code, flag) VALUES (?, ?, ?)
+    ON CONFLICT (name) DO UPDATE SET code=excluded.code, flag=excluded.flag`, countries)
+    + bulk(db, `INSERT INTO bookmakers (id, name) VALUES (?, ?)
+      ON CONFLICT (id) DO UPDATE SET name=excluded.name`, bookmakers)
+    + bulk(db, `INSERT INTO bet_types (id, name) VALUES (?, ?)
+      ON CONFLICT (id) DO UPDATE SET name=excluded.name`, bets);
+}
+
 const STEPS = [
+  ['referentiels', deriveReferentials],
   ['competitions', deriveLeagues],
   ['journees', deriveRounds],
   ['equipes', deriveTeams],

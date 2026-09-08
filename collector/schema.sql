@@ -76,6 +76,18 @@ CREATE TABLE IF NOT EXISTS countries (
   flag TEXT
 );
 
+-- Referentiels des cotes : sans eux, la table odds ne contient que des
+-- numeros. « bet_id 1 » ne dit rien ; « Resultat du match » se lit.
+CREATE TABLE IF NOT EXISTS bookmakers (
+  id   INTEGER PRIMARY KEY,
+  name TEXT
+);
+
+CREATE TABLE IF NOT EXISTS bet_types (
+  id   INTEGER PRIMARY KEY,
+  name TEXT
+);
+
 CREATE TABLE IF NOT EXISTS venues (
   id       INTEGER PRIMARY KEY,
   name     TEXT,

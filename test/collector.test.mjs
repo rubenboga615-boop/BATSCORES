@@ -47,8 +47,28 @@ describe('planification', () => {
     const db = newDb();
     const created = seedPlan(db, { league: LEAGUE, season: SEASON, profile: 'essentiel' });
     assert.ok(created >= 3);
-    const counts = taskCounts(db, scopeOf(LEAGUE, SEASON));
-    assert.equal(counts.pending, created);
+
+    // Les taches se repartissent en deux familles : celles qui appartiennent
+    // a un perimetre, et les referentiels — pays, bookmakers, types de paris —
+    // qui valent pour toute la base et n'en ont donc aucun.
+    const scoped = taskCounts(db, scopeOf(LEAGUE, SEASON)).pending;
+    const globaux = db.prepare(
+      "SELECT COUNT(*) AS n FROM tasks WHERE scope IS NULL AND state = 'pending'",
+    ).get().n;
+    assert.equal(scoped + globaux, created);
+    assert.equal(globaux, 3, 'pays, bookmakers, types de paris');
+  });
+
+  test('les referentiels ne sont demandes qu\'une fois pour toute la base', () => {
+    const db = newDb();
+    seedPlan(db, { league: LEAGUE, season: SEASON, profile: 'essentiel' });
+    // Une deuxieme cible ne doit pas redemander les pays ni les bookmakers :
+    // ce sont les memes reponses, et chaque appel est paye.
+    seedPlan(db, { league: 39, season: 2024, profile: 'essentiel' });
+    const globaux = db.prepare(
+      'SELECT COUNT(*) AS n FROM tasks WHERE scope IS NULL',
+    ).get().n;
+    assert.equal(globaux, 3);
   });
 
   test('la planification est idempotente', () => {
@@ -175,6 +195,68 @@ describe('collecte complete d\'une saison', () => {
   });
 });
 
+describe('plusieurs championnats et plusieurs saisons', () => {
+  test('chaque cible est collectee, aucune n\'est confondue avec une autre', async () => {
+    const db = newDb();
+    const targets = [
+      { league: LEAGUE, season: SEASON },
+      { league: 39, season: SEASON },
+      { league: LEAGUE, season: 2024 },
+    ];
+
+    await runCollector({
+      db, client: newClient(db), targets, profile: 'essentiel', maxCalls: 60,
+    });
+
+    // Le calendrier de chaque cible doit avoir ete demande separement.
+    for (const target of targets) {
+      const raw = db.prepare(
+        "SELECT COUNT(*) AS n FROM raw_responses WHERE endpoint = '/fixtures' AND params_key = ?",
+      ).get(`league=${target.league}&season=${target.season}`);
+      assert.equal(raw.n, 1, `calendrier manquant pour ${target.league}/${target.season}`);
+    }
+
+    // Et les taches doivent porter le perimetre de leur propre cible.
+    const scopes = db.prepare(
+      "SELECT DISTINCT scope FROM tasks WHERE scope IS NOT NULL ORDER BY scope",
+    ).all().map((r) => r.scope);
+    for (const target of targets) {
+      assert.ok(
+        scopes.includes(scopeOf(target.league, target.season)),
+        `perimetre absent : ${target.league}/${target.season}`,
+      );
+    }
+  });
+
+  test('une cible unique reste acceptee telle quelle', async () => {
+    const db = newDb();
+    const result = await runCollector({
+      db, client: newClient(db), league: LEAGUE, season: SEASON, profile: 'essentiel', maxCalls: 5,
+    });
+    assert.ok(result.done > 0);
+  });
+
+  test('le journal d\'execution resume le lot sans devenir illisible', async () => {
+    const { describeTargets } = await import('../collector/worker.mjs');
+    const beaucoup = [];
+    for (const season of [2021, 2022, 2023]) {
+      for (const league of [39, 140, 135, 78, 61]) beaucoup.push({ league, season });
+    }
+    const resume = describeTargets(beaucoup);
+    assert.match(resume, /league:39,140,135\+2/);
+    assert.match(resume, /season:2021,2022,2023/);
+    assert.ok(resume.length < 60, `resume trop long : ${resume}`);
+  });
+
+  test('sans cible, le collecteur refuse plutot que de deviner', async () => {
+    const db = newDb();
+    await assert.rejects(
+      runCollector({ db, client: newClient(db), profile: 'essentiel' }),
+      /Aucune cible/,
+    );
+  });
+});
+
 describe('reprise apres interruption', () => {
   test('une collecte interrompue reprend sans rien reperdre', async () => {
     const db = newDb();
@@ -229,6 +311,24 @@ describe('derivation', () => {
 
     assert.equal(secondCount, firstCount, 'pas de doublon a la seconde derivation');
     assert.equal(callsToday(db), callsAfterCollect, 'aucun appel API');
+  });
+
+  test('les referentiels rendent les cotes lisibles', () => {
+    const db = newDb();
+    const { saveRaw } = dbModule;
+    saveRaw(db, { endpoint: '/countries', params: {}, results: 1, payload: [{ name: 'France', code: 'FR', flag: 'x' }] });
+    saveRaw(db, { endpoint: '/odds/bookmakers', params: {}, results: 1, payload: [{ id: 8, name: 'Bet365' }] });
+    // L'API renvoie les identifiants de paris sous forme de chaines.
+    saveRaw(db, { endpoint: '/odds/bets', params: {}, results: 1, payload: [{ id: '1', name: 'Match Winner' }] });
+
+    deriveAll(db);
+
+    assert.equal(db.prepare("SELECT code FROM countries WHERE name = 'France'").get().code, 'FR');
+    assert.equal(db.prepare('SELECT name FROM bookmakers WHERE id = 8').get().name, 'Bet365');
+    // Le type doit etre numerique, sinon la jointure avec odds.bet_id echoue.
+    const bet = db.prepare('SELECT id, name FROM bet_types WHERE id = 1').get();
+    assert.equal(bet.name, 'Match Winner');
+    assert.equal(typeof bet.id, 'number');
   });
 
   test('chaque collecte de cotes ajoute un releve date au lieu d\'ecraser le precedent', () => {

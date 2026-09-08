@@ -349,8 +349,10 @@ public/
                    recherche, favoris, comparateur, actualites, collecte
   sw.js            service worker : reseau d'abord, cache en secours hors ligne
 collector/
-  schema.sql       29 tables : archive brute, file de travail, donnees normalisees
+  schema.sql       31 tables : archive brute, file de travail, donnees normalisees
   paths.mjs        chemins des fichiers, sans dependance a node:sqlite
+  leagues.mjs      ensembles de championnats, plages de saisons, cibles
+  export.mjs       export CSV, JSON et NDJSON de toutes les tables
   lock.mjs         verrou partage : une seule collecte a la fois
   db.mjs           acces SQLite, file de taches, comptabilite du quota
   client.mjs       client API : limitation de debit, reprises, archivage brut

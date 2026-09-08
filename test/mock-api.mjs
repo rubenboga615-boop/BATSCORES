@@ -527,6 +527,18 @@ const ENDPOINTS = {
     ],
   }]),
 
+  '/countries': () => ([
+    { name: 'France', code: 'FR', flag: 'https://media.example/fr.svg' },
+  ]),
+
+  '/odds/bookmakers': () => ([{ id: 8, name: 'Bet365' }, { id: 6, name: 'Bwin' }]),
+
+  '/odds/bets': () => ([
+    { id: '1', name: 'Match Winner' },
+    { id: '5', name: 'Goals Over/Under' },
+    { id: '8', name: 'Both Teams Score' },
+  ]),
+
   '/standings': () => ([{
     league: {
       id: 61, name: 'Ligue 1', country: 'France',

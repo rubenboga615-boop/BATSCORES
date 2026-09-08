@@ -6,6 +6,7 @@ import { Router } from 'express';
 import express from 'express';
 import { lockState, releaseLock } from '../../collector/lock.mjs';
 import { dataDir, logPath } from '../../collector/paths.mjs';
+import { parseLeagues, parseSeasons, targetsOf, leagueName } from '../../collector/leagues.mjs';
 
 /**
  * Pilotage et supervision du collecteur depuis l'interface web.
@@ -63,6 +64,33 @@ async function loadCollector() {
  * plus simple et fausse de la meme facon. Une seule regle, un seul endroit.
  */
 const runningPid = () => lockState()?.pid ?? null;
+
+/**
+ * Interprete une selection de championnats et de saisons.
+ *
+ * Les memes formes qu'en ligne de commande : un ensemble ("top5"), une liste
+ * ("61,39"), une plage ("2019-2024"). Une saisie fautive est refusee avec sa
+ * raison plutot que corrigee en silence : se tromper de competition coute des
+ * appels payes.
+ */
+function readSelection(source) {
+  try {
+    const leagues = parseLeagues(source.league ?? source.leagues);
+    const seasons = parseSeasons(source.season ?? source.seasons);
+    if (!leagues.length || !seasons.length) {
+      return { error: 'Parametres league et season obligatoires (ex: top5 et 2019-2024).' };
+    }
+    // Garde-fou : au-dela, l'estimation elle-meme devient longue et la
+    // demande resulte presque toujours d'une faute de saisie.
+    const targets = targetsOf(leagues, seasons);
+    if (targets.length > 200) {
+      return { error: `Selection trop large : ${targets.length} cibles. Procedez par lots.` };
+    }
+    return { leagues, seasons, targets };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
 
 /** Refuse l'action si le pilotage n'est pas explicitement active. */
 function requireToken(req, res) {
@@ -124,7 +152,15 @@ collectorRouter.get('/status', async (req, res, next) => {
                SUM(state = 'done')    AS done,
                SUM(state = 'failed')  AS failed
         FROM tasks WHERE scope IS NOT NULL GROUP BY scope ORDER BY scope
-      `).all();
+      `).all().map((row) => {
+        // Le nom du championnat est connu du serveur : l'envoyer evite au
+        // navigateur d'afficher « competition 61 » et de dupliquer la table.
+        const match = /^league:(\d+)\|season:(\d+)$/.exec(row.scope || '');
+        return {
+          ...row,
+          label: match ? `${leagueName(Number(match[1]))} · saison ${match[2]}` : row.scope,
+        };
+      });
 
       const dailyLimit = Number(process.env.API_FOOTBALL_DAILY_LIMIT) || 7500;
       return res.json({
@@ -151,25 +187,49 @@ collectorRouter.get('/plan', async (req, res, next) => {
     const loaded = await loadCollector();
     if (!loaded.ok) return res.status(503).json({ error: loaded.reason });
 
-    const league = Number(req.query.league);
-    const season = Number(req.query.season);
     const profile = req.query.profile || 'complet';
-    if (!Number.isInteger(league) || !Number.isInteger(season)) {
-      return res.status(400).json({ error: 'Parametres league et season obligatoires.' });
-    }
     if (!Object.keys(loaded.plan.PROFILES).includes(profile)) {
       return res.status(400).json({ error: `Profil inconnu : ${profile}` });
     }
 
+    const selection = readSelection(req.query);
+    if (selection.error) return res.status(400).json({ error: selection.error });
+
     const dbPath = loaded.db.DEFAULT_DB_PATH;
     const database = loaded.db.openDatabase(dbPath);
     try {
-      const estimate = loaded.plan.estimate(database, { league, season, profile });
+      // Le cout se cumule sur toutes les cibles : c'est ce total qui decide
+      // si la collecte tient dans une journee de quota ou dans deux semaines.
+      const totals = { base: 0, seasonWide: 0, perFixture: 0, perTeam: 0, perPlayer: 0 };
+      let total = 0;
+      let known = true;
+      let paginationKnown = true;
+      let fixtureCount = 0;
+      let teamCount = 0;
+
+      for (const target of selection.targets) {
+        const one = loaded.plan.estimate(database, { ...target, profile });
+        total += one.total;
+        fixtureCount += one.fixtureCount;
+        teamCount += one.teamCount;
+        known = known && one.known;
+        paginationKnown = paginationKnown && one.paginationKnown;
+        for (const key of Object.keys(totals)) totals[key] += one.breakdown[key];
+      }
+
       const dailyLimit = Number(process.env.API_FOOTBALL_DAILY_LIMIT) || 7500;
       return res.json({
-        ...estimate,
+        total,
+        breakdown: totals,
+        known,
+        paginationKnown,
+        fixtureCount,
+        teamCount,
+        targets: selection.targets.length,
+        leagues: selection.leagues,
+        seasons: selection.seasons,
         dailyLimit,
-        days: Number((estimate.total / dailyLimit).toFixed(2)),
+        days: Number((total / dailyLimit).toFixed(2)),
         usedToday: loaded.db.callsToday(database),
       });
     } finally {
@@ -177,6 +237,73 @@ collectorRouter.get('/plan', async (req, res, next) => {
     }
   } catch (err) {
     next(err);
+  }
+});
+
+/**
+ * GET /api/collector/export?format=csv&table=fixtures
+ *
+ * Sert une table en telechargement. Une table a la fois, en flux : la base
+ * peut peser plusieurs gigaoctets, et tout charger en memoire pour repondre
+ * ferait tomber le serveur sur les grosses tables.
+ *
+ * En lecture seule, donc sans jeton : exporter ne depense aucun quota et ne
+ * demarre aucun processus.
+ */
+collectorRouter.get('/export', async (req, res, next) => {
+  try {
+    const loaded = await loadCollector();
+    if (!loaded.ok) return res.status(503).json({ error: loaded.reason });
+
+    const dbPath = loaded.db.DEFAULT_DB_PATH;
+    if (!fs.existsSync(dbPath)) {
+      return res.status(404).json({ error: 'Aucune base collectee.' });
+    }
+
+    const { listTables, csvRow } = await import('../../collector/export.mjs');
+    const format = String(req.query.format || 'csv').toLowerCase();
+    if (!['csv', 'json', 'ndjson'].includes(format)) {
+      return res.status(400).json({ error: `Format inconnu : ${format}.` });
+    }
+
+    const database = loaded.db.openDatabase(dbPath);
+    try {
+      const disponibles = listTables(database, { includeRaw: true });
+      const table = String(req.query.table || '');
+      if (!table) {
+        return res.json({ tables: disponibles.map((name) => ({
+          name,
+          rows: database.prepare(`SELECT COUNT(*) AS n FROM "${name}"`).get().n,
+        })) });
+      }
+      // La table est comparee a la liste reelle plutot qu'echappee : aucune
+      // chaine venue du client n'atteint le SQL.
+      if (!disponibles.includes(table)) {
+        return res.status(404).json({ error: `Table inconnue : ${table}.` });
+      }
+
+      const types = { csv: 'text/csv', json: 'application/json', ndjson: 'application/x-ndjson' };
+      res.setHeader('Content-Type', `${types[format]}; charset=utf-8`);
+      res.setHeader('Content-Disposition', `attachment; filename="${table}.${format}"`);
+
+      const rows = database.prepare(`SELECT * FROM "${table}"`).all();
+      if (format === 'csv') {
+        const columns = rows.length
+          ? Object.keys(rows[0])
+          : database.prepare(`PRAGMA table_info("${table}")`).all().map((c) => c.name);
+        res.write(`${csvRow(columns)}\n`);
+        for (const row of rows) res.write(`${csvRow(columns.map((c) => row[c]))}\n`);
+      } else if (format === 'ndjson') {
+        for (const row of rows) res.write(`${JSON.stringify(row)}\n`);
+      } else {
+        res.write(JSON.stringify(rows));
+      }
+      return res.end();
+    } finally {
+      database.close();
+    }
+  } catch (err) {
+    return next(err);
   }
 });
 
@@ -210,16 +337,13 @@ collectorRouter.post('/start', async (req, res, next) => {
       return res.status(409).json({ error: 'Une collecte est deja en cours.' });
     }
 
-    const league = Number(req.body?.league);
-    const season = Number(req.body?.season);
     const profile = String(req.body?.profile || 'complet');
     const maxCalls = req.body?.maxCalls === undefined || req.body.maxCalls === null || req.body.maxCalls === ''
       ? null
       : Number(req.body.maxCalls);
 
-    if (!Number.isInteger(league) || !Number.isInteger(season)) {
-      return res.status(400).json({ error: 'Parametres league et season obligatoires.' });
-    }
+    const selection = readSelection(req.body || {});
+    if (selection.error) return res.status(400).json({ error: selection.error });
     if (!Object.keys(loaded.plan.PROFILES).includes(profile)) {
       return res.status(400).json({ error: `Profil inconnu : ${profile}` });
     }
@@ -231,7 +355,15 @@ collectorRouter.post('/start', async (req, res, next) => {
     // Journal remis a zero a chaque lancement : la page montre l'execution en cours.
     const out = fs.openSync(LOG_FILE, 'w');
 
-    const args = [CLI, 'run', '--league', String(league), '--season', String(season), '--profile', profile];
+    // On transmet la selection telle qu'elle a ete validee, pas la saisie
+    // brute : la ligne de commande n'a pas a la revalider, et rien
+    // d'inattendu ne peut s'y glisser.
+    const args = [
+      CLI, 'run',
+      '--league', selection.leagues.join(','),
+      '--season', selection.seasons.join(','),
+      '--profile', profile,
+    ];
     if (maxCalls !== null) args.push('--max-calls', String(maxCalls));
 
     const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', ...args], {
@@ -247,7 +379,15 @@ collectorRouter.post('/start', async (req, res, next) => {
     // de demarrer en annoncant qu'une collecte tournait deja — avec son
     // propre numero de processus.
 
-    return res.status(202).json({ started: true, pid: child.pid, league, season, profile, maxCalls });
+    return res.status(202).json({
+      started: true,
+      pid: child.pid,
+      leagues: selection.leagues,
+      seasons: selection.seasons,
+      targets: selection.targets.length,
+      profile,
+      maxCalls,
+    });
   } catch (err) {
     next(err);
   }

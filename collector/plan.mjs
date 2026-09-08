@@ -67,6 +67,19 @@ const SEASON_ENDPOINTS = {
   topredcards: '/players/topredcards',
 };
 
+/**
+ * Referentiels : la meme reponse pour tout le monde, collectee une seule fois
+ * pour la vie de la base. Trois appels au total, jamais renouveles.
+ *
+ * Sans eux, la table des cotes ne contient que des numeros : « bookmaker 8 »,
+ * « bet 1 ». Trois appels rendent lisible tout ce qui sera collecte ensuite.
+ */
+const REFERENTIALS = {
+  countries: '/countries',
+  bookmakers: '/odds/bookmakers',
+  bets: '/odds/bets',
+};
+
 export const scopeOf = (league, season) => `league:${league}|season:${season}`;
 
 /**
@@ -81,6 +94,7 @@ export function allowedKinds(profile) {
   if (!spec) throw new Error(`Profil inconnu : ${profile}`);
   return new Set([
     'league', 'teams', 'fixtures',
+    ...Object.keys(REFERENTIALS).map((n) => `ref_${n}`),
     ...spec.seasonWide.map((n) => `season_${n}`),
     ...spec.perFixture.map((n) => `fixture_${n}`),
     ...spec.perTeam.map((n) => `team_${n}`),
@@ -102,6 +116,15 @@ export function seedPlan(db, { league, season, profile = 'complet' }) {
   const add = (kind, endpoint, params, priority) => {
     if (enqueue(db, { kind, endpoint, params, scope, priority })) created += 1;
   };
+
+  // Referentiels globaux : sans perimetre, et dedoublonnes d'office. Les
+  // ajouter ici plutot que dans une commande separee garantit qu'ils existent
+  // des la premiere collecte, sans geste supplementaire.
+  for (const [name, endpoint] of Object.entries(REFERENTIALS)) {
+    if (enqueue(db, { kind: `ref_${name}`, endpoint, params: {}, scope: null, priority: 0 })) {
+      created += 1;
+    }
+  }
 
   add('league', '/leagues', { id: league }, 1);
   add('teams', '/teams', { league, season }, 2);
