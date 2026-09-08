@@ -69,8 +69,8 @@ export function leagueBlock(group) {
         <span class="league__count">
           ${liveCount ? `<span style="color:var(--live)">${liveCount} en direct</span> · ` : ''}${group.matches.length}
         </span>
-        <a class="league__link" href="#/competition/${group.league.id}?season=${group.league.season || ''}"
-           onclick="event.stopPropagation()">Classement</a>
+        <a class="league__link" data-standalone-link
+           href="#/competition/${group.league.id}?season=${group.league.season || ''}">Classement</a>
       </header>
       <div class="league__body">
         ${group.matches.map(matchRow).join('')}

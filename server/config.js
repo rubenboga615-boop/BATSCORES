@@ -17,6 +17,21 @@ const provider = PROVIDERS[providerKey] || PROVIDERS.apisports;
 
 export const config = {
   port: Number(process.env.PORT) || 3000,
+  /**
+   * Interface d'ecoute. Derriere un proxy inverse sur la meme machine, mettre
+   * 127.0.0.1 : le port de Node cesse alors d'etre joignable de l'exterieur,
+   * et tout passe forcement par le proxy — donc par HTTPS. La valeur par
+   * defaut reste ouverte pour ne pas rendre injoignable une installation
+   * simple qui n'a pas encore de proxy.
+   */
+  host: process.env.HOST || '0.0.0.0',
+  /**
+   * A activer uniquement derriere un proxy inverse de confiance : Express
+   * lit alors X-Forwarded-For pour connaitre l'adresse reelle du visiteur.
+   * Faire confiance a cet en-tete sans proxy devant, c'est laisser n'importe
+   * qui declarer l'adresse de son choix.
+   */
+  trustProxy: process.env.TRUST_PROXY === '1',
   apiKey: (process.env.API_FOOTBALL_KEY || '').trim(),
   provider: providerKey,
   // Surcharge facultative : utile pour les tests hors ligne contre un serveur factice.
@@ -26,6 +41,19 @@ export const config = {
     ...(provider.extraHeaders || {}),
   },
   defaultTimezone: process.env.DEFAULT_TIMEZONE || 'Europe/Paris',
+  /**
+   * Origines d'images autorisees par la politique de securite du contenu.
+   *
+   * Les logos et photos viennent du fournisseur. La liste est surchargeable
+   * parce qu'une politique figee dans le code fait disparaitre toutes les
+   * images sans un mot le jour ou le fournisseur change de domaine — et parce
+   * que les tests tournent contre un faux fournisseur sur un autre hote.
+   */
+  cspImageHosts: [
+    'https://api-sports.io',
+    'https://*.api-sports.io',
+    ...(process.env.CSP_EXTRA_IMG_HOSTS || '').split(/\s+/).filter(Boolean),
+  ],
   rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE) || 280,
 };
 

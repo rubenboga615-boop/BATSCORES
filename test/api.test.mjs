@@ -26,6 +26,42 @@ describe('service', () => {
     assert.ok(body.rate.lastMinuteCalls >= 0);
   });
 
+  test('les en-tetes de securite sont poses sur chaque reponse', async () => {
+    const { headers } = await stack.get('/api/health');
+    assert.equal(headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(headers.get('x-frame-options'), 'DENY');
+    assert.equal(headers.get('referrer-policy'), 'no-referrer');
+    assert.equal(headers.get('x-powered-by'), null, 'la pile technique ne s\'annonce pas');
+
+    const csp = headers.get('content-security-policy');
+    assert.match(csp, /script-src 'self'/, "aucun script en ligne ne doit etre autorise");
+    assert.ok(!/script-src[^;]*unsafe-inline/.test(csp), 'unsafe-inline sur les scripts annulerait la politique');
+    assert.match(csp, /frame-ancestors 'none'/);
+    // Les logos viennent du fournisseur : sans cette autorisation, la page
+    // s'afficherait sans aucune image.
+    assert.match(csp, /img-src[^;]*api-sports\.io/);
+    // Mais la porte ne s'ouvre pas a n'importe quoi.
+    assert.ok(!/img-src[^;]*\*[^.]/.test(csp), 'aucun joker d\'origine complete');
+  });
+
+  test('la page elle-meme porte la meme politique', async () => {
+    const response = await fetch(`${stack.baseUrl}/`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
+  });
+
+  test('aucun gestionnaire de script en ligne dans le code servi', async () => {
+    // Un seul attribut onerror ou onclick suffirait a rendre la politique
+    // inapplicable : la verification porte sur le code livre, pas sur l'intention.
+    for (const asset of ['/index.html', '/js/utils.js', '/js/app.js', '/js/components.js']) {
+      const body = await fetch(`${stack.baseUrl}${asset}`).then((r) => r.text());
+      assert.ok(
+        !/\son[a-z]+\s*=\s*["']/.test(body),
+        `${asset} contient un gestionnaire d'evenement en ligne`,
+      );
+    }
+  });
+
   test('une route inconnue renvoie 404 en JSON', async () => {
     const { status, body } = await stack.get('/api/inexistant');
     assert.equal(status, 404);

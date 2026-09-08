@@ -15,3 +15,6 @@ blob-report/
 
 # Base de donnees du collecteur
 data/
+
+# Journaux PM2
+logs/

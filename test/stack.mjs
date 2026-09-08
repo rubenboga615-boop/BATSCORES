@@ -19,6 +19,10 @@ const collectorDb = path.join(collectorDir, 'collecte.db');
 process.env.API_FOOTBALL_KEY = 'cle-de-test';
 process.env.API_FOOTBALL_BASE_URL = mock.url;
 process.env.DEFAULT_TIMEZONE = 'Europe/Paris';
+// Les logos du faux fournisseur pointent vers un domaine factice : sans cette
+// autorisation, la politique de securite les bloquerait et les essais
+// navigateur signaleraient des erreurs qui n'existent pas en production.
+process.env.CSP_EXTRA_IMG_HOSTS = 'https://media.example';
 process.env.API_FOOTBALL_DAILY_LIMIT = '7500';
 process.env.COLLECTOR_DB = collectorDb;
 process.env.PORT = process.env.E2E_PORT || '4600';

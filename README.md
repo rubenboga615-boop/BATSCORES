@@ -205,25 +205,48 @@ En cas d'echec, le rapport Playwright est conserve comme artefact pendant 7 jour
 
 ## Deploiement
 
+**[DEPLOIEMENT.md](DEPLOIEMENT.md)** deroule la mise en ligne pas a pas, sans rien
+supposer d'acquis : VPS, Node, PM2, nom de domaine, HTTPS, sauvegardes. Comptez une
+heure la premiere fois, trente secondes pour chaque mise a jour ensuite.
+
 L'application est un serveur Node classique, sans etape de build. Elle fonctionne sur
-tout hebergeur acceptant Node 18+ (Render, Railway, Fly.io, VPS, Docker...).
+tout hebergeur acceptant Node 20+ ; le collecteur, lui, exige Node 22.
 
-Deux points a respecter :
+Quatre points a respecter :
 
-1. Definir `API_FOOTBALL_KEY` dans les variables d'environnement de l'hebergeur,
-   **jamais** dans un fichier versionne. `.env` est deja ignore par git.
+1. Definir `API_FOOTBALL_KEY` dans `.env` ou dans les variables d'environnement de
+   l'hebergeur, **jamais** dans un fichier versionne. `.env` est ignore par git ;
+   `.env.example` ne doit contenir que des valeurs d'exemple.
 2. Servir en HTTPS : le service worker et l'installation PWA l'exigent.
+3. Derriere un proxy inverse, poser `HOST=127.0.0.1` et `TRUST_PROXY=1`. Sans le
+   premier, le site reste joignable en clair sur le port de Node, ce qui contourne
+   le HTTPS ; sans le second, toutes les requetes semblent venir du proxy.
+4. **Une seule instance.** Le cache et le limiteur de debit vivent en memoire : deux
+   instances, c'est deux fois moins d'effet du cache et deux fois le plafond d'appels
+   envoye au fournisseur, pour le meme trafic. `ecosystem.config.cjs` impose donc le
+   mode `fork` a un seul processus.
 
-Le cache etant en memoire, chaque instance a le sien. Avec plusieurs instances,
-la consommation de quota est multipliee d'autant : ajustez `RATE_LIMIT_PER_MINUTE`
-en consequence.
+Fichiers fournis : `ecosystem.config.cjs` (PM2) et `Caddyfile.exemple` (proxy inverse
+et certificat automatique).
+
+### En-tetes de securite
+
+`server/app.js` pose une politique de securite du contenu sans exception sur les
+scripts : aucun script en ligne, aucune origine tierce. C'est ce qui a motive le
+remplacement des derniers gestionnaires `onclick`/`onerror` en attribut par des
+ecouteurs delegues — une politique qu'on affaiblit pour faire passer le code
+n'en est plus une. Les images du fournisseur sont autorisees explicitement ;
+`CSP_EXTRA_IMG_HOSTS` permet d'en ajouter sans toucher au code.
 
 ## Structure du projet
 
 ```
+DEPLOIEMENT.md     mise en ligne pas a pas (VPS, PM2, domaine, HTTPS)
+ecosystem.config.cjs configuration PM2 : un seul processus, deliberement
+Caddyfile.exemple  proxy inverse et certificat automatique
 server/
-  index.js         point d'entree : ecoute le port configure
-  app.js           construction de l'application Express (routes, statiques, erreurs)
+  index.js         point d'entree : ecoute HOST:PORT, arret propre
+  app.js           application Express : routes, en-tetes de securite, statiques
   config.js        lecture de l'environnement, choix du fournisseur
   apiFootball.js   client amont : cache, deduplication, limiteur de debit
   cache.js         cache memoire TTL

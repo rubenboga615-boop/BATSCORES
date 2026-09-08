@@ -49,6 +49,11 @@ bindPlayerEvents(root);
 
 // Ouverture d'un match ou d'une equipe depuis n'importe quelle liste.
 root.addEventListener('click', (event) => {
+  // Un lien place a l'interieur d'une zone cliquable doit naviguer vers sa
+  // propre destination sans declencher l'action de la zone. C'etait le role
+  // d'un `onclick` en ligne, incompatible avec la politique de securite.
+  if (event.target.closest('[data-standalone-link]')) return;
+
   const star = event.target.closest('[data-star]');
   if (star) {
     event.stopPropagation();
@@ -91,6 +96,17 @@ root.addEventListener('click', (event) => {
   const match = event.target.closest('[data-match]');
   if (match) navigate(`/match/${match.dataset.match}`);
 });
+
+/**
+ * Logos indisponibles : le fournisseur en sert des milliers, quelques-uns
+ * manquent toujours. L'evenement `error` ne remonte pas, mais il descend :
+ * un seul ecouteur en phase de capture remplace autant de gestionnaires en
+ * ligne — et rend une politique de securite du contenu possible.
+ */
+document.addEventListener('error', (event) => {
+  const img = event.target;
+  if (img instanceof HTMLImageElement) img.style.visibility = 'hidden';
+}, true);
 
 // Accessibilite clavier sur les lignes cliquables.
 root.addEventListener('keydown', (event) => {

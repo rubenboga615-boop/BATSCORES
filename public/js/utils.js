@@ -80,7 +80,10 @@ export function logo(url, alt, cls = '') {
   if (!url) {
     return `<span class="${cls}" style="display:inline-block;width:18px;height:18px"></span>`;
   }
-  return `<img class="${cls}" src="${esc(url)}" alt="${esc(alt || '')}" loading="lazy" onerror="this.style.visibility='hidden'" />`;
+  // Pas de gestionnaire `onerror` en attribut : ce serait du script en ligne,
+  // et cela interdirait toute politique de securite du contenu digne de ce nom.
+  // L'echec de chargement est traite par un ecouteur delegue dans app.js.
+  return `<img class="${cls}" src="${esc(url)}" alt="${esc(alt || '')}" loading="lazy" />`;
 }
 
 /** Compare deux valeurs de statistique pour dessiner la barre de repartition. */

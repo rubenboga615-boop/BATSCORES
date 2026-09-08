@@ -62,6 +62,16 @@ test.describe('liste des matchs', () => {
     await expect(first).not.toHaveClass(/is-collapsed/);
   });
 
+  test('le lien Classement navigue sans replier la competition', async ({ page }) => {
+    // Ce lien vit à l'intérieur de l'en-tête repliable. Il utilisait un
+    // `onclick` en ligne pour arrêter la propagation ; depuis la politique de
+    // sécurité du contenu, c'est un écouteur délégué qui s'en charge.
+    const first = page.locator('.league').first();
+    await first.locator('.league__link').click();
+    await expect(page).toHaveURL(/#\/competition\/\d+/);
+    await expect(page.locator('.standings, .card, .empty').first()).toBeVisible();
+  });
+
   test('la navigation par date met a jour l\'URL', async ({ page }) => {
     await page.click('[data-shift="1"]');
     await expect(page).toHaveURL(/\?date=\d{4}-\d{2}-\d{2}/);

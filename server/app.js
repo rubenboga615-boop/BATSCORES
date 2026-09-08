@@ -4,6 +4,7 @@ import express from 'express';
 import compression from 'compression';
 
 import { ApiError } from './apiFootball.js';
+import { config } from './config.js';
 import { fixturesRouter } from './routes/fixtures.js';
 import { competitionsRouter, teamsRouter } from './routes/competitions.js';
 import { miscRouter } from './routes/misc.js';
@@ -17,6 +18,38 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'public');
 
 /**
+ * En-tetes de securite.
+ *
+ * La politique est stricte sur les scripts — aucun script en ligne, aucune
+ * origine tierce — ce qui n'a ete possible qu'apres avoir remplace le dernier
+ * gestionnaire `onerror` en attribut par un ecouteur delegue.
+ *
+ * Les styles en ligne restent autorises : les vues calculent des largeurs de
+ * barres en pourcentage, et les interdire demanderait de reecrire chaque
+ * graphique sans rien gagner face au risque reel, qui est l'injection de script.
+ */
+function securityHeaders(req, res, next) {
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: ${config.cspImageHosts.join(' ')}`,
+    "connect-src 'self'",
+    "font-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+  ].join('; '));
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Aucune de ces fonctions n'est utilisee : autant les refuser explicitement.
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()');
+  next();
+}
+
+/**
  * Construit l'application Express sans l'ecouter.
  * Separer la construction de l'ecoute permet aux tests de demarrer
  * l'application sur un port ephemere.
@@ -24,7 +57,9 @@ const publicDir = path.join(__dirname, '..', 'public');
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
+  if (config.trustProxy) app.set('trust proxy', 1);
   app.use(compression());
+  app.use(securityHeaders);
 
   app.use('/api/fixtures', fixturesRouter);
   app.use('/api/competitions', competitionsRouter);
