@@ -1,0 +1,34 @@
+{
+  "name": "batscores",
+  "version": "1.0.0",
+  "description": "BATSCORES - Scores de football en direct, resultats, classements et statistiques. Propulse par API-Football.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:e2e",
+    "collect": "node --disable-warning=ExperimentalWarning collector/cli.mjs",
+    "vapid": "node scripts/vapid.mjs"
+  },
+  "keywords": [
+    "football",
+    "livescore",
+    "api-football",
+    "scores"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "compression": "^1.7.4",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

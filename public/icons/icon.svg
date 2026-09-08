@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#0d1117"/>
+  <circle cx="256" cy="240" r="132" fill="#21c55d"/>
+  <path d="M256 148l58 42-22 68h-72l-22-68z" fill="#0d1117"/>
+  <g stroke="#0d1117" stroke-width="16" fill="none" stroke-linecap="round">
+    <path d="M256 148v-40M314 190l40-14M292 258l38 30M220 258l-38 30M198 190l-40-14"/>
+  </g>
+  <text x="256" y="452" font-family="Helvetica, Arial, sans-serif" font-size="76" font-weight="bold"
+        text-anchor="middle" fill="#e7edf3">BATSCORES</text>
+</svg>

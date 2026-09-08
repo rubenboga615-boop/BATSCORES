@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# BATSCORES - proxy inverse Caddy
+#
+# Copiez ce fichier vers /etc/caddy/Caddyfile, remplacez le nom de domaine,
+# puis : sudo systemctl reload caddy
+#
+# Caddy obtient et renouvelle le certificat HTTPS tout seul, a condition que
+# le domaine pointe deja vers l'adresse IP du serveur et que les ports 80 et
+# 443 soient ouverts. Il n'y a rien d'autre a faire pour le HTTPS.
+# ---------------------------------------------------------------------------
+
+batscores.exemple.fr {
+	# L'application ecoute en local ; Caddy est le seul point d'entree public.
+	reverse_proxy 127.0.0.1:3000
+
+	encode zstd gzip
+
+	header {
+		# HSTS : une fois le site visite en HTTPS, le navigateur refuse le HTTP.
+		# A n'activer qu'une fois le certificat obtenu et le site fonctionnel,
+		# car l'engagement dure un an et n'est pas facile a annuler.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+		# Les autres en-tetes de securite sont poses par l'application
+		# elle-meme (server/app.js) : un seul endroit ou les lire.
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/batscores.log
+		format console
+	}
+}
+
+# ---------------------------------------------------------------------------
+# Variante sans nom de domaine, pour essayer depuis l'adresse IP.
+# Caddy ne peut pas obtenir de certificat pour une adresse IP : la connexion
+# reste en HTTP, donc en clair. A ne garder que le temps d'un essai.
+# ---------------------------------------------------------------------------
+# :80 {
+# 	reverse_proxy 127.0.0.1:3000
+# 	encode zstd gzip
+# }
