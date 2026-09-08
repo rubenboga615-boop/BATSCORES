@@ -14,6 +14,7 @@ import { renderMatchDetail, bindMatchDetailEvents, refreshMatchDetail } from './
 import { renderCompetitions, renderCompetitionDetail, bindCompetitionEvents } from './views/competitions.js';
 import { renderFavorites } from './views/favorites.js';
 import { renderTeam } from './views/team.js';
+import { renderPlayer, bindPlayerEvents } from './views/player.js';
 import { renderSearch } from './views/search.js';
 import { renderCollector, bindCollectorEvents, refreshCollector } from './views/collector.js';
 
@@ -27,6 +28,7 @@ route('/match/:id', (ctx) => renderMatchDetail(root, ctx));
 route('/competitions', () => renderCompetitions(root));
 route('/competition/:id', (ctx) => renderCompetitionDetail(root, ctx));
 route('/equipe/:id', (ctx) => renderTeam(root, ctx));
+route('/joueur/:id', (ctx) => renderPlayer(root, ctx));
 route('/favoris', () => renderFavorites(root));
 route('/recherche', (ctx) => renderSearch(root, ctx));
 route('/collecte', () => renderCollector(root));
@@ -41,6 +43,7 @@ bindMatchesEvents(root);
 bindMatchDetailEvents(root);
 bindCompetitionEvents(root);
 bindCollectorEvents(root);
+bindPlayerEvents(root);
 
 // Ouverture d'un match ou d'une equipe depuis n'importe quelle liste.
 root.addEventListener('click', (event) => {
@@ -54,6 +57,13 @@ root.addEventListener('click', (event) => {
       star.classList.toggle('is-active', added);
       star.textContent = added ? '★ Suivi' : '☆ Suivre ce match';
     }
+    return;
+  }
+
+  const playerLink = event.target.closest('[data-player-link]');
+  if (playerLink) {
+    event.stopPropagation();
+    navigate(`/joueur/${playerLink.dataset.playerLink}`);
     return;
   }
 
@@ -83,7 +93,7 @@ root.addEventListener('click', (event) => {
 // Accessibilite clavier sur les lignes cliquables.
 root.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter' && event.key !== ' ') return;
-  const target = event.target.closest('[data-match], [data-collapse]');
+  const target = event.target.closest('[data-match], [data-collapse], [data-player-link]');
   if (!target) return;
   event.preventDefault();
   target.click();

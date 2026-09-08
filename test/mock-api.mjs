@@ -84,18 +84,37 @@ export const POSTPONED = baseFixture(1004, {
   goals: { home: null, away: null },
 });
 
-const standingRow = (rank, id, name, points, description) => ({
-  rank,
-  team: { id, name, logo: 'https://media.example/t.png' },
-  points,
-  goalsDiff: 22 - rank,
-  group: 'Ligue 1',
-  form: 'WWDLW',
-  description,
-  all: { played: 10, win: 7, draw: 2, lose: 1, goals: { for: 22, against: 10 } },
-  home: { played: 5 },
-  away: { played: 5 },
-});
+const standingRow = (rank, id, name, points, description) => {
+  const win = Math.max(0, 8 - rank);
+  const draw = rank % 3;
+  const lose = 10 - win - draw;
+  return {
+    rank,
+    team: { id, name, logo: 'https://media.example/t.png' },
+    points,
+    goalsDiff: 22 - rank,
+    group: 'Ligue 1',
+    form: 'WWDLW',
+    description,
+    all: { played: 10, win, draw, lose, goals: { for: 22 - rank, against: 8 + rank } },
+    // L'API detaille aussi le bilan a domicile et a l'exterieur, ce qui permet
+    // de recalculer deux classements distincts.
+    home: {
+      played: 5,
+      win: Math.min(5, win),
+      draw: Math.max(0, Math.min(5 - Math.min(5, win), draw)),
+      lose: Math.max(0, 5 - Math.min(5, win) - Math.max(0, Math.min(5 - Math.min(5, win), draw))),
+      goals: { for: 14 - rank, against: 4 + rank },
+    },
+    away: {
+      played: 5,
+      win: Math.max(0, win - 5),
+      draw: Math.max(0, draw - 1),
+      lose: Math.max(0, 5 - Math.max(0, win - 5) - Math.max(0, draw - 1)),
+      goals: { for: 8, against: 4 + rank },
+    },
+  };
+};
 
 const ENDPOINTS = {
   '/fixtures': (params) => {
@@ -130,25 +149,38 @@ const ENDPOINTS = {
     },
   ]),
 
-  '/fixtures/lineups': () => ([
-    {
-      team: { id: 85, name: 'Paris Saint Germain', logo: 'https://media.example/psg.png' },
-      formation: '4-3-3',
-      coach: { id: 1, name: 'Luis Enrique' },
-      startXI: [
-        { player: { id: 1, name: 'G. Donnarumma', number: 99, pos: 'G' } },
-        { player: { id: 2, name: 'Vitinha', number: 17, pos: 'M' } },
-      ],
-      substitutes: [{ player: { id: 3, name: 'M. Asensio', number: 11, pos: 'F' } }],
-    },
-    {
-      team: { id: 81, name: 'Marseille', logo: 'https://media.example/om.png' },
-      formation: '4-2-3-1',
-      coach: { id: 2, name: 'Roberto De Zerbi' },
-      startXI: [{ player: { id: 4, name: 'G. Rulli', number: 1, pos: 'G' } }],
-      substitutes: [],
-    },
-  ]),
+  '/fixtures/lineups': () => {
+    // Onze titulaires avec leur grille "ligne:position", comme l'API reelle :
+    // c'est cette coordonnee qui permet de dessiner la composition.
+    const eleven = (base, names) => names.map((name, i) => ({
+      player: {
+        id: base + i, name, number: i + 1,
+        pos: i === 0 ? 'G' : i < 5 ? 'D' : i < 9 ? 'M' : 'F',
+        grid: i === 0 ? '1:1'
+          : i < 5 ? `2:${i}`
+            : i < 9 ? `3:${i - 4}`
+              : `4:${i - 8}`,
+      },
+    }));
+    return [
+      {
+        team: { id: 85, name: 'Paris Saint Germain', logo: 'https://media.example/psg.png', colors: { player: { primary: '004170' } } },
+        formation: '4-4-2',
+        coach: { id: 1, name: 'Luis Enrique' },
+        startXI: eleven(100, ['G. Donnarumma', 'A. Hakimi', 'Marquinhos', 'W. Pacho', 'N. Mendes',
+          'Vitinha', 'J. Neves', 'F. Ruiz', 'K. Kvaratskhelia', 'O. Dembele', 'B. Barcola']),
+        substitutes: [{ player: { id: 130, name: 'M. Asensio', number: 11, pos: 'F', grid: null } }],
+      },
+      {
+        team: { id: 81, name: 'Marseille', logo: 'https://media.example/om.png', colors: { player: { primary: 'ffffff' } } },
+        formation: '4-4-2',
+        coach: { id: 2, name: 'Roberto De Zerbi' },
+        startXI: eleven(200, ['G. Rulli', 'J. Murillo', 'L. Balerdi', 'D. Cornelius', 'Q. Merlin',
+          'A. Rabiot', 'P. Hojbjerg', 'A. Harit', 'M. Greenwood', 'A. Aubameyang', 'L. Maupay']),
+        substitutes: [],
+      },
+    ];
+  },
 
   '/fixtures/statistics': () => ([
     {
@@ -170,6 +202,174 @@ const ENDPOINTS = {
   ]),
 
   '/fixtures/headtohead': () => ([baseFixture(900), baseFixture(901)]),
+
+  '/fixtures/players': () => ([
+    {
+      team: { id: 85, name: 'Paris Saint Germain' },
+      players: [{
+        player: { id: 1, name: 'Ousmane Dembele', photo: null },
+        statistics: [{
+          games: { minutes: 90, number: 10, position: 'F', rating: '8.4', captain: false },
+          shots: { total: 5, on: 3 },
+          goals: { total: 2, assists: 1, conceded: 0, saves: null },
+          passes: { total: 41, key: 4, accuracy: '87' },
+          duels: { total: 12, won: 8 },
+          dribbles: { attempts: 7, success: 5 },
+          fouls: { drawn: 3, committed: 1 },
+          cards: { yellow: 0, red: 0 },
+        }],
+      }],
+    },
+    {
+      team: { id: 81, name: 'Marseille' },
+      players: [{
+        player: { id: 3, name: 'Leonardo Balerdi', photo: null },
+        statistics: [{
+          games: { minutes: 90, number: 5, position: 'D', rating: '6.1', captain: true },
+          shots: { total: 0, on: 0 },
+          goals: { total: 0, assists: 0, conceded: 3, saves: null },
+          passes: { total: 55, key: 0, accuracy: '91' },
+          duels: { total: 9, won: 4 },
+          dribbles: { attempts: 0, success: 0 },
+          fouls: { drawn: 1, committed: 2 },
+          cards: { yellow: 1, red: 0 },
+        }],
+      }],
+    },
+  ]),
+
+  '/players/topassists': () => ([{
+    player: { id: 2, name: 'Vitinha', photo: null, nationality: 'Portugal' },
+    statistics: [{
+      team: { id: 85, name: 'Paris Saint Germain', logo: null },
+      goals: { total: 3, assists: 11 },
+      cards: { yellow: 2, red: 0 },
+      games: { appearences: 30, minutes: 2600, rating: '7.4' },
+    }],
+  }]),
+
+  '/players/topyellowcards': () => ([{
+    player: { id: 3, name: 'Leonardo Balerdi', photo: null, nationality: 'Argentina' },
+    statistics: [{
+      team: { id: 81, name: 'Marseille', logo: null },
+      goals: { total: 1, assists: 0 },
+      cards: { yellow: 12, red: 1 },
+      games: { appearences: 32, minutes: 2880, rating: '6.8' },
+    }],
+  }]),
+
+  '/players/topredcards': () => ([{
+    player: { id: 3, name: 'Leonardo Balerdi', photo: null, nationality: 'Argentina' },
+    statistics: [{
+      team: { id: 81, name: 'Marseille', logo: null },
+      goals: { total: 1, assists: 0 },
+      cards: { yellow: 12, red: 1 },
+      games: { appearences: 32, minutes: 2880, rating: '6.8' },
+    }],
+  }]),
+
+  '/teams/statistics': (p) => ({
+    league: { id: Number(p.get('league')), name: 'Ligue 1', country: 'France', season: Number(p.get('season')) },
+    team: { id: Number(p.get('team')), name: 'Paris Saint Germain', logo: null },
+    form: 'WWDLWWWDLW',
+    fixtures: {
+      played: { home: 17, away: 17, total: 34 },
+      wins: { home: 14, away: 8, total: 22 },
+      draws: { home: 2, away: 5, total: 7 },
+      loses: { home: 1, away: 4, total: 5 },
+    },
+    goals: {
+      for: {
+        total: { home: 45, away: 36, total: 81 },
+        average: { home: '2.6', away: '2.1', total: '2.4' },
+        minute: {
+          '0-15': { total: 9, percentage: '11.11%' },
+          '16-30': { total: 12, percentage: '14.81%' },
+          '31-45': { total: 15, percentage: '18.52%' },
+          '46-60': { total: 14, percentage: '17.28%' },
+          '61-75': { total: 13, percentage: '16.05%' },
+          '76-90': { total: 18, percentage: '22.22%' },
+        },
+      },
+      against: {
+        total: { home: 12, away: 21, total: 33 },
+        average: { home: '0.7', away: '1.2', total: '1.0' },
+        minute: {
+          '0-15': { total: 3, percentage: '9.09%' },
+          '16-30': { total: 5, percentage: '15.15%' },
+          '31-45': { total: 6, percentage: '18.18%' },
+          '46-60': { total: 7, percentage: '21.21%' },
+          '61-75': { total: 6, percentage: '18.18%' },
+          '76-90': { total: 6, percentage: '18.18%' },
+        },
+      },
+    },
+    biggest: {
+      streak: { wins: 7, draws: 2, loses: 2 },
+      wins: { home: '6-0', away: '0-5' },
+      loses: { home: '0-2', away: '3-1' },
+    },
+    clean_sheet: { home: 9, away: 4, total: 13 },
+    failed_to_score: { home: 1, away: 3, total: 4 },
+    penalty: {
+      scored: { total: 8, percentage: '88.89%' },
+      missed: { total: 1, percentage: '11.11%' },
+      total: 9,
+    },
+    lineups: [
+      { formation: '4-3-3', played: 24 },
+      { formation: '4-2-3-1', played: 8 },
+      { formation: '3-5-2', played: 2 },
+    ],
+    cards: { yellow: {}, red: {} },
+  }),
+
+  '/players': (p) => {
+    if (p.get('id')) {
+      return [{
+        player: {
+          id: Number(p.get('id')), name: 'Ousmane Dembele',
+          firstname: 'Ousmane', lastname: 'Dembele', age: 28,
+          birth: { date: '1997-05-15', place: 'Vernon', country: 'France' },
+          nationality: 'France', height: '178 cm', weight: '67 kg',
+          injured: false, photo: null,
+        },
+        statistics: [{
+          team: { id: 85, name: 'Paris Saint Germain', logo: null },
+          league: { id: 61, name: 'Ligue 1', country: 'France', season: 2023 },
+          games: { appearences: 29, lineups: 26, minutes: 2280, position: 'Attacker', rating: '7.53' },
+          goals: { total: 16, assists: 9, conceded: null, saves: null },
+          shots: { total: 78, on: 34 },
+          passes: { total: 812, key: 51, accuracy: '81' },
+          duels: { total: 240, won: 118 },
+          dribbles: { attempts: 141, success: 72 },
+          tackles: { total: 18, blocks: 2, interceptions: 9 },
+          fouls: { drawn: 62, committed: 21 },
+          cards: { yellow: 3, red: 0 },
+          penalty: { scored: 2, missed: 0 },
+        }],
+      }];
+    }
+    return [];
+  },
+
+  '/transfers': (p) => ([{
+    player: { id: Number(p.get('player') || 1), name: 'Ousmane Dembele' },
+    update: '2024-01-01',
+    transfers: [
+      { date: '2023-08-15', type: '50M', teams: { in: { id: 85, name: 'Paris Saint Germain', logo: null }, out: { id: 529, name: 'Barcelona', logo: null } } },
+      { date: '2017-08-25', type: '105M', teams: { in: { id: 529, name: 'Barcelona', logo: null }, out: { id: 165, name: 'Borussia Dortmund', logo: null } } },
+    ],
+  }]),
+
+  '/trophies': () => ([
+    { league: 'Ligue 1', country: 'France', season: '2023/2024', place: 'Winner' },
+    { league: 'World Cup', country: 'World', season: '2018', place: 'Winner' },
+  ]),
+
+  '/sidelined': () => ([
+    { type: 'Hamstring Injury', start: '2024-02-01', end: '2024-03-01' },
+  ]),
 
   '/leagues': (params) => {
     const all = [

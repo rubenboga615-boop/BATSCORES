@@ -149,6 +149,7 @@ function lineupColumn(lineup) {
         <span>${esc(lineup.team?.name || '')}</span>
         <span class="lineup__formation">${esc(lineup.formation || '')}</span>
       </div>
+      ${pitch(lineup)}
       <div class="lineup__group">Titulaires</div>
       ${players.map(row).join('')}
       ${bench.length ? `<div class="lineup__group">Remplacants</div>${bench.map(row).join('')}` : ''}
@@ -198,8 +199,106 @@ function h2hPanel({ h2h, fixture }) {
     </div>`;
 }
 
+/** Couleur de la note, façon barème scolaire. */
+function ratingTone(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 'var(--text-faint)';
+  if (n >= 7.5) return 'var(--accent)';
+  if (n >= 6.5) return 'var(--text)';
+  if (n >= 6) return 'var(--warn)';
+  return 'var(--live)';
+}
+
+/** Une ligne de joueur : note, minutes, et ce qu'il a produit. */
+function playerRow(entry) {
+  const p = entry.player;
+  const st = entry.statistics?.[0] || {};
+  const g = st.games || {};
+
+  // On ne montre que ce que le joueur a reellement fait : une ligne d'attaquant
+  // sans tir n'affiche pas "0 tir", elle n'affiche rien.
+  const bits = [];
+  if (st.goals?.total) bits.push(`${st.goals.total} but${st.goals.total > 1 ? 's' : ''}`);
+  if (st.goals?.assists) bits.push(`${st.goals.assists} passe${st.goals.assists > 1 ? 's' : ''} d.`);
+  if (st.shots?.total) bits.push(`${st.shots.on ?? 0}/${st.shots.total} tirs cadres`);
+  if (st.passes?.total) bits.push(`${st.passes.total} passes${st.passes.accuracy ? ` · ${st.passes.accuracy}%` : ''}`);
+  if (st.duels?.total) bits.push(`${st.duels.won ?? 0}/${st.duels.total} duels`);
+  if (st.dribbles?.attempts) bits.push(`${st.dribbles.success ?? 0}/${st.dribbles.attempts} dribbles`);
+  if (st.goals?.saves) bits.push(`${st.goals.saves} arrets`);
+  if (st.cards?.yellow) bits.push('carton jaune');
+  if (st.cards?.red) bits.push('carton rouge');
+
+  return `
+    <div class="player-stat" data-player-link="${p.id}" role="button" tabindex="0">
+      <span class="player__number">${esc(g.number ?? '')}</span>
+      <div class="player-stat__main">
+        <div class="player-stat__name">
+          ${esc(p.name)}${g.captain ? ' <span class="captain" title="Capitaine">C</span>' : ''}
+        </div>
+        <div class="player-stat__line">
+          ${g.minutes !== null && g.minutes !== undefined ? `${g.minutes}'` : 'non entre'}${bits.length ? ` · ${esc(bits.join(' · '))}` : ''}
+        </div>
+      </div>
+      <span class="player-stat__rating" style="color:${ratingTone(g.rating)}">${g.rating ? esc(Number(g.rating).toFixed(1)) : '—'}</span>
+    </div>`;
+}
+
+function playersPanel({ players, fixture }) {
+  if (!players?.length) {
+    return emptyState(
+      'Notes indisponibles',
+      'Le fournisseur ne publie pas de statistiques individuelles pour cette rencontre.',
+      '📈',
+    );
+  }
+  return players.map((side) => {
+    const entries = [...(side.players || [])].sort((a, b) => {
+      const ra = Number(a.statistics?.[0]?.games?.rating) || 0;
+      const rb = Number(b.statistics?.[0]?.games?.rating) || 0;
+      return rb - ra;
+    });
+    const isHome = side.team?.id === fixture.home.id;
+    return `
+      <div class="card">
+        <div class="card__title">
+          ${esc(side.team?.name || '')} ${isHome ? '· domicile' : '· exterieur'}
+        </div>
+        ${entries.map(playerRow).join('')}
+      </div>`;
+  }).join('');
+}
+
+/** Compositions dessinees sur un terrain, a partir de la grille de l'API. */
+function pitch(lineup, flip = false) {
+  const players = (lineup.startXI || []).map((e) => e.player).filter((p) => p?.grid);
+  if (!players.length) return '';
+
+  // La grille de l'API est "ligne:position" en partant du gardien.
+  const lines = new Map();
+  for (const p of players) {
+    const [row] = String(p.grid).split(':').map(Number);
+    if (!lines.has(row)) lines.set(row, []);
+    lines.get(row).push(p);
+  }
+  const ordered = [...lines.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
+  const rows = flip ? ordered.reverse() : ordered;
+
+  return `
+    <div class="pitch" aria-label="Composition de ${esc(lineup.team?.name || '')}">
+      ${rows.map((line) => `
+        <div class="pitch__line">
+          ${line.map((p) => `
+            <span class="pitch__player" data-player-link="${p.id}" role="button" tabindex="0">
+              <span class="pitch__shirt">${esc(p.number ?? '')}</span>
+              <span class="pitch__name">${esc(String(p.name).split(' ').pop())}</span>
+            </span>`).join('')}
+        </div>`).join('')}
+    </div>`;
+}
+
 const PANELS = {
   summary: summaryPanel,
+  players: playersPanel,
   lineups: lineupsPanel,
   stats: statisticsPanel,
   h2h: h2hPanel,
@@ -230,6 +329,7 @@ export async function renderMatchDetail(root, { params }) {
 
   const tabs = [
     { id: 'summary', label: 'Resume' },
+    { id: 'players', label: 'Joueurs' },
     { id: 'stats', label: 'Statistiques' },
     { id: 'lineups', label: 'Compositions' },
     { id: 'h2h', label: 'Confrontations' },

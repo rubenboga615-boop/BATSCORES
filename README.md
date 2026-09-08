@@ -19,7 +19,13 @@ historique interrogeable a partir de la meme cle API : voir
   compositions et banc, bilan des confrontations.
 - **Competitions** : catalogue filtrable, classement avec zones europeennes et
   relegation, calendrier par journee, meilleurs buteurs.
-- **Fiche equipe** : identite, prochaines rencontres et derniers resultats.
+- **Fiche equipe** : identite, bilan de saison (series, records, buts par tranche de
+  quinze minutes, formations utilisees, penaltys), prochaines rencontres et resultats.
+- **Fiche joueur** : identite, statistiques de saison detaillees, transferts, palmares,
+  blessures et suspensions.
+- **Notes des joueurs** par rencontre, et composition dessinee sur un terrain.
+- **Quatre classements individuels** : buteurs, passeurs, cartons jaunes, cartons rouges.
+- **Classement general, a domicile et a l'exterieur**, rang et points recalcules.
 - **Recherche** d'equipes et de competitions.
 - **Favoris** : suivez des matchs et des competitions ; tout reste sur votre appareil.
 - **PWA** : installable sur mobile, avec demarrage instantane hors ligne du shell.
@@ -209,7 +215,7 @@ server/
   apiFootball.js   client amont : cache, deduplication, limiteur de debit
   cache.js         cache memoire TTL
   normalize.js     mise en forme des reponses, regroupement, ordre d'affichage
-  routes/          fixtures, competitions, equipes, recherche, sante, collecteur
+  routes/          fixtures, competitions, equipes, joueurs, recherche, sante, collecteur
 public/
   index.html       shell de l'application
   css/styles.css   theme sombre
@@ -221,7 +227,7 @@ public/
     components.js  fragments de rendu partages
     i18n.js        traduction des libelles du fournisseur
     utils.js       formatage des dates, scores, statuts
-    views/         matchs, direct, fiche match, competitions, equipe, recherche, favoris, collecte
+    views/         matchs, direct, fiche match, competitions, equipe, joueur, recherche, favoris, collecte
   sw.js            service worker : reseau d'abord, cache en secours hors ligne
 collector/
   schema.sql       28 tables : archive brute, file de travail, donnees normalisees

@@ -709,6 +709,143 @@ td.points { font-weight: 800; }
   overflow-y: auto;
 }
 
+/* --------------------------- Notes des joueurs ---------------------------- */
+
+.player-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+.player-stat:hover { background: var(--bg-hover); }
+.player-stat__main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.player-stat__name { font-size: 14px; font-weight: 600; }
+.player-stat__line {
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.4;
+}
+.player-stat__rating {
+  font-weight: 800;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+  text-align: right;
+}
+.captain {
+  display: inline-grid;
+  place-items: center;
+  width: 14px; height: 14px;
+  border-radius: 3px;
+  background: var(--text-faint);
+  color: var(--bg);
+  font-size: 9px;
+  font-weight: 800;
+  vertical-align: 1px;
+}
+
+/* ------------------------ Composition sur le terrain ---------------------- */
+
+.pitch {
+  display: grid;
+  gap: 10px;
+  padding: 16px 10px;
+  /* Lignes blanches discretes sur fond de pelouse sombre : le terrain doit se
+     lire d'un coup d'oeil sans voler la vedette aux joueurs. */
+  background:
+    linear-gradient(transparent 49.5%, rgba(255,255,255,0.07) 49.5%, rgba(255,255,255,0.07) 50.5%, transparent 50.5%),
+    radial-gradient(circle at 50% 50%, transparent 44px, rgba(255,255,255,0.07) 44px, rgba(255,255,255,0.07) 46px, transparent 46px),
+    linear-gradient(180deg, #12261a, #0f1f16);
+  border-top: 1px solid var(--border);
+}
+.pitch__line {
+  display: flex;
+  justify-content: space-evenly;
+  gap: 4px;
+}
+.pitch__player {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  cursor: pointer;
+  max-width: 68px;
+}
+.pitch__shirt {
+  width: 26px; height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #06210f;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.pitch__player:hover .pitch__shirt { background: #fff; }
+.pitch__name {
+  font-size: 10px;
+  color: #dfe9e2;
+  text-align: center;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 68px;
+}
+
+/* ------------------------ Barres de repartition ---------------------------- */
+
+.minute-bars {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 14px 12px;
+  align-items: end;
+  border-top: 1px solid var(--border);
+}
+.minute-bar { display: grid; gap: 5px; justify-items: center; }
+.minute-bar__col {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  min-height: 3px;
+}
+.minute-bar__col.against { background: var(--live); }
+.minute-bar__n {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.minute-bar__label { font-size: 10px; color: var(--text-faint); }
+
+/* ------------------------------ Paires cle/valeur -------------------------- */
+
+.kv { display: grid; }
+.kv__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.kv__row:first-child { border-top: 0; }
+.kv__k { color: var(--text-dim); }
+.kv__v { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; }
+.chip {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 14px;
+  padding: 4px 11px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.chip strong { color: var(--text); }
+
 /* -------------------------- Formulaires et journal ------------------------ */
 
 .field { display: grid; gap: 4px; }

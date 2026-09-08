@@ -70,7 +70,7 @@ function paintCatalogue(root) {
 
 /* ---------------------------- Fiche competition --------------------------- */
 
-const detail = { id: null, season: null, tab: 'standings', cache: {} };
+const detail = { id: null, season: null, tab: 'standings', cache: {}, standingsSide: 'all', rankingType: 'scorers' };
 
 const ZONE_CLASSES = [
   [/champions league/i, 'zone-ucl'],
@@ -85,11 +85,51 @@ const zoneClass = (description) => {
   return '';
 };
 
+const SIDES = [
+  ['all', 'General'],
+  ['home', 'A domicile'],
+  ['away', 'A l\'exterieur'],
+];
+
+/**
+ * Le classement general, celui a domicile et celui a l'exterieur arrivent
+ * dans la meme reponse : les deux derniers n'etaient jamais affiches.
+ * A domicile ou a l'exterieur, on recalcule le rang et les points.
+ */
+function sideRows(rows, side) {
+  if (side === 'all') return rows;
+  return rows
+    .map((r) => {
+      const b = r[side] || {};
+      const goals = b.goals || {};
+      const points = (b.win ?? 0) * 3 + (b.draw ?? 0);
+      return {
+        ...r,
+        points,
+        goalsDiff: (goals.for ?? 0) - (goals.against ?? 0),
+        all: b,
+        form: null,
+        description: null,
+      };
+    })
+    .sort((a, b) => b.points - a.points || b.goalsDiff - a.goalsDiff)
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
 function standingsTable(payload) {
   if (!payload.tables.length) {
     return emptyState('Classement indisponible', 'Cette competition ne publie pas de classement pour cette saison.', '📋');
   }
-  return payload.tables.map((table) => `
+  const side = detail.standingsSide;
+  const switcher = `
+    <div class="filters" style="margin-bottom:10px">
+      ${SIDES.map(([key, label]) => `
+        <button class="filter ${key === side ? 'is-active' : ''}" data-side="${key}">${label}</button>`).join('')}
+    </div>`;
+
+  return switcher + payload.tables.map((rawTable) => {
+    const table = { ...rawTable, rows: sideRows(rawTable.rows, side) };
+    return `
     <div class="card">
       <div class="card__title">${esc(table.group || '')}</div>
       <div class="table-wrap">
@@ -118,31 +158,52 @@ function standingsTable(payload) {
           </tbody>
         </table>
       </div>
+      ${side === 'all' ? `
       <div class="legend">
         <span><i style="background:#3b82f6"></i>Ligue des champions</span>
         <span><i style="background:#f59e0b"></i>Europa League</span>
         <span><i style="background:#14b8a6"></i>Conference League</span>
         <span><i style="background:#ff4d4f"></i>Relegation</span>
-      </div>
-    </div>`).join('');
+      </div>` : ''}
+    </div>`;
+  }).join('');
 }
 
-function scorersTable(payload) {
-  if (!payload.scorers.length) {
-    return emptyState('Aucun buteur', 'Les statistiques individuelles ne sont pas disponibles ici.', '👟');
+const RANKING_TYPES = [
+  ['scorers', 'Buteurs', (r) => r.goals],
+  ['assists', 'Passeurs', (r) => r.assists],
+  ['yellow', 'Cartons jaunes', (r) => r.yellow],
+  ['red', 'Cartons rouges', (r) => r.red],
+];
+
+function rankingsTable(payload) {
+  const spec = RANKING_TYPES.find(([key]) => key === payload.type) || RANKING_TYPES[0];
+  const [, label, value] = spec;
+
+  const switcher = `
+    <div class="filters" style="margin-bottom:10px">
+      ${RANKING_TYPES.map(([key, name]) => `
+        <button class="filter ${key === payload.type ? 'is-active' : ''}" data-ranking="${key}">${name}</button>`).join('')}
+    </div>`;
+
+  if (!payload.rows.length) {
+    return switcher + emptyState('Classement vide', 'Cette competition ne publie pas ce classement.', '👟');
   }
-  return `
+
+  return switcher + `
     <div class="card">
-      <div class="card__title">Meilleurs buteurs</div>
-      ${payload.scorers.map((s, index) => `
-        <div class="list-row" data-team="${s.team.id}">
+      <div class="card__title">${esc(label)}</div>
+      ${payload.rows.map((r, index) => `
+        <div class="list-row" data-player-link="${r.player.id}">
           <span style="width:22px;color:var(--text-faint);font-variant-numeric:tabular-nums">${index + 1}</span>
-          ${logo(s.player.photo, s.player.name)}
+          ${logo(r.player.photo, r.player.name)}
           <div class="list-row__main">
-            <div class="list-row__name">${esc(s.player.name)}</div>
-            <div class="list-row__sub">${esc(s.team.name || '')} · ${s.assists} passe(s) decisive(s)</div>
+            <div class="list-row__name">${esc(r.player.name)}</div>
+            <div class="list-row__sub">
+              ${esc(r.team.name || '')} · ${r.appearances} match(s)${r.rating ? ` · note ${esc(r.rating)}` : ''}
+            </div>
           </div>
-          <span class="list-row__value">${s.goals}</span>
+          <span class="list-row__value">${value(r)}</span>
         </div>`).join('')}
     </div>`;
 }
@@ -166,7 +227,7 @@ function fixturesList(payload) {
 async function loadPanel(root) {
   const panel = root.querySelector('#competition-panel');
   if (!panel) return;
-  const cacheKey = `${detail.id}-${detail.season}-${detail.tab}`;
+  const cacheKey = `${detail.id}-${detail.season}-${detail.tab}-${detail.standingsSide}-${detail.rankingType}`;
   if (detail.cache[cacheKey]) {
     panel.innerHTML = detail.cache[cacheKey];
     return;
@@ -175,7 +236,7 @@ async function loadPanel(root) {
   try {
     let html;
     if (detail.tab === 'standings') html = standingsTable(await api.standings(detail.id, detail.season));
-    else if (detail.tab === 'scorers') html = scorersTable(await api.scorers(detail.id, detail.season));
+    else if (detail.tab === 'scorers') html = rankingsTable(await api.rankings(detail.id, detail.season, detail.rankingType));
     else html = fixturesList(await api.competitionFixtures(detail.id, detail.season));
     detail.cache[cacheKey] = html;
     panel.innerHTML = html;
@@ -200,7 +261,7 @@ export async function renderCompetitionDetail(root, { params, query }) {
   const tabs = [
     { id: 'standings', label: 'Classement' },
     { id: 'fixtures', label: 'Calendrier' },
-    { id: 'scorers', label: 'Buteurs' },
+    { id: 'scorers', label: 'Classements' },
   ];
 
   root.innerHTML = `
@@ -236,6 +297,20 @@ export function bindCompetitionEvents(root) {
     const row = event.target.closest('[data-competition]');
     if (row) {
       window.location.hash = `#/competition/${row.dataset.competition}?season=${row.dataset.season}`;
+      return;
+    }
+
+    const side = event.target.closest('[data-side]');
+    if (side && root.querySelector('#competition-panel')) {
+      detail.standingsSide = side.dataset.side;
+      loadPanel(root);
+      return;
+    }
+
+    const ranking = event.target.closest('[data-ranking]');
+    if (ranking && root.querySelector('#competition-panel')) {
+      detail.rankingType = ranking.dataset.ranking;
+      loadPanel(root);
       return;
     }
 

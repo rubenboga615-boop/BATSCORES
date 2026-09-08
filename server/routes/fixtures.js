@@ -88,7 +88,7 @@ fixturesRouter.get('/:id(\\d+)', async (req, res, next) => {
     const wantsDetails = phase !== 'scheduled';
     const h2hKey = `${fixture.home.id}-${fixture.away.id}`;
 
-    const [events, lineups, statistics, h2h] = await Promise.all([
+    const [events, lineups, statistics, players, h2h] = await Promise.all([
       wantsDetails
         ? apiGet('/fixtures/events', { fixture: id }, detailTtl).then((r) => r.data).catch(() => [])
         : Promise.resolve([]),
@@ -96,13 +96,18 @@ fixturesRouter.get('/:id(\\d+)', async (req, res, next) => {
       wantsDetails
         ? apiGet('/fixtures/statistics', { fixture: id }, detailTtl).then((r) => r.data).catch(() => [])
         : Promise.resolve([]),
+      // Notes et statistiques individuelles : l'endpoint le plus riche de la
+      // fiche de match, et le seul que l'interface n'exploitait pas encore.
+      wantsDetails
+        ? apiGet('/fixtures/players', { fixture: id }, detailTtl).then((r) => r.data).catch(() => [])
+        : Promise.resolve([]),
       apiGet('/fixtures/headtohead', { h2h: h2hKey, last: 10, timezone }, 12 * 3600_000)
         .then((r) => r.data.map(normalizeFixture).filter(Boolean))
         .catch(() => []),
     ]);
 
     res.set('Cache-Control', `public, max-age=${phase === 'live' ? 15 : 60}`);
-    res.json({ fixture, events, lineups, statistics, h2h });
+    res.json({ fixture, events, lineups, statistics, players, h2h });
   } catch (err) {
     next(err);
   }

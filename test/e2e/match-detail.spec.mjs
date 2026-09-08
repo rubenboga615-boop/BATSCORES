@@ -40,9 +40,11 @@ test.describe('fiche de match', () => {
 
   test('l\'onglet compositions affiche formations et joueurs', async ({ page }) => {
     await page.click('[data-tab="lineups"]');
-    await expect(page.locator('.lineup__formation').first()).toHaveText('4-3-3');
+    await expect(page.locator('.lineup__formation').first()).toHaveText('4-4-2');
     await expect(page.locator('.player').first()).toContainText('G. Donnarumma');
     await expect(page.getByText('Luis Enrique')).toBeVisible();
+    // Onze titulaires plus un remplacant et l'entraineur pour l'equipe locale.
+    await expect(page.locator('.card').first().locator('.player')).toHaveCount(13);
   });
 
   test('l\'onglet confrontations liste les rencontres passees', async ({ page }) => {
