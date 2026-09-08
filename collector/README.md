@@ -46,6 +46,40 @@ npm run collect -- status
 
 Options : `--league`, `--season`, `--profile`, `--max-calls`, `--db`, `--quiet`.
 
+## Depuis l'interface web
+
+La page **Collecte** (`#/collecte`) supervise et pilote le collecteur depuis un
+navigateur — utile pour suivre depuis un telephone une collecte qui tourne
+plusieurs jours sur le serveur :
+
+- quota consomme du jour et appels restants ;
+- avancement (taches faites / en attente / en echec) ;
+- journal de l'execution en cours, rafraichi automatiquement ;
+- contenu de la base et historique des executions ;
+- estimation du cout d'une collecte, qui **ne consomme aucun appel** ;
+- lancement et arret d'une collecte.
+
+### Le lancement est desactive par defaut
+
+Declencher une collecte depense un quota paye. Sur une instance accessible
+publiquement, un bouton sans protection permettrait a n'importe qui de vider
+votre quota. Les actions de lancement et d'arret exigent donc un jeton, et
+sont **refusees tant qu'il n'est pas configure** :
+
+```bash
+# dans .env
+COLLECTOR_ADMIN_TOKEN=une-phrase-secrete-que-vous-choisissez
+```
+
+Sans ce reglage, la page reste consultable : supervision et estimation
+fonctionnent, seuls les boutons de lancement sont inertes. C'est le bon
+reglage si vous n'avez pas besoin de piloter a distance.
+
+Le jeton se saisit une fois dans la page, puis reste dans le navigateur.
+
+Une collecte lancee depuis la page tourne en arriere-plan : elle continue si
+vous fermez l'onglet, et meme si le serveur web redemarre.
+
 ## Profils
 
 Le cout est domine par les appels **par rencontre** : chaque endpoint ajoute

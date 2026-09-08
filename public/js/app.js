@@ -15,6 +15,7 @@ import { renderCompetitions, renderCompetitionDetail, bindCompetitionEvents } fr
 import { renderFavorites } from './views/favorites.js';
 import { renderTeam } from './views/team.js';
 import { renderSearch } from './views/search.js';
+import { renderCollector, bindCollectorEvents, refreshCollector } from './views/collector.js';
 
 const root = document.getElementById('app');
 
@@ -28,6 +29,7 @@ route('/competition/:id', (ctx) => renderCompetitionDetail(root, ctx));
 route('/equipe/:id', (ctx) => renderTeam(root, ctx));
 route('/favoris', () => renderFavorites(root));
 route('/recherche', (ctx) => renderSearch(root, ctx));
+route('/collecte', () => renderCollector(root));
 
 setNotFound(() => {
   root.innerHTML = emptyState('Page introuvable', 'Ce lien ne correspond a aucune page.', '🧭');
@@ -38,6 +40,7 @@ setNotFound(() => {
 bindMatchesEvents(root);
 bindMatchDetailEvents(root);
 bindCompetitionEvents(root);
+bindCollectorEvents(root);
 
 // Ouverture d'un match ou d'une equipe depuis n'importe quelle liste.
 root.addEventListener('click', (event) => {
@@ -110,7 +113,8 @@ function highlightNav() {
     : path.startsWith('/live') ? 'live'
       : path.startsWith('/competition') ? 'competitions'
         : path.startsWith('/favoris') ? 'favorites'
-          : '';
+          : path.startsWith('/collecte') ? 'collector'
+            : '';
   document.querySelectorAll('[data-nav]').forEach((el) => {
     el.classList.toggle('is-active', el.dataset.nav === key);
   });
@@ -150,6 +154,7 @@ async function tick() {
   const path = currentPath();
   if (path === '/live') await refreshLive(root);
   else if (path.startsWith('/match/')) await refreshMatchDetail(root);
+  else if (path === '/collecte') await refreshCollector(root);
   else if (path === '/' && matchesState.date === isoDay(new Date())) await refreshMatches(root);
   paintLiveBadge();
 }

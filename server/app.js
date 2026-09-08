@@ -7,6 +7,7 @@ import { ApiError } from './apiFootball.js';
 import { fixturesRouter } from './routes/fixtures.js';
 import { competitionsRouter, teamsRouter } from './routes/competitions.js';
 import { miscRouter } from './routes/misc.js';
+import { collectorRouter } from './routes/collector.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'public');
@@ -24,6 +25,7 @@ export function createApp() {
   app.use('/api/fixtures', fixturesRouter);
   app.use('/api/competitions', competitionsRouter);
   app.use('/api/teams', teamsRouter);
+  app.use('/api/collector', collectorRouter);
   app.use('/api', miscRouter);
 
   app.use(express.static(publicDir, {

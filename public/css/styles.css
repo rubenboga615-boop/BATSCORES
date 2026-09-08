@@ -709,6 +709,44 @@ td.points { font-weight: 800; }
   overflow-y: auto;
 }
 
+/* -------------------------- Formulaires et journal ------------------------ */
+
+.field { display: grid; gap: 4px; }
+.field > span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  font-weight: 700;
+}
+.field input, .field select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+.field input:focus, .field select:focus { border-color: var(--accent); }
+
+pre.log {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 /* ------------------------------- Responsive ------------------------------ */
 
 @media (max-width: 760px) {
@@ -719,7 +757,7 @@ td.points { font-weight: 800; }
 
   .tab-bar {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     position: fixed;
     bottom: 0; left: 0; right: 0;
     height: var(--tab-bar-h);

@@ -83,6 +83,9 @@ En developpement, `npm run dev` redemarre le serveur a chaque modification.
 | `DEFAULT_TIMEZONE` | `Europe/Paris` | Fuseau demande au fournisseur. |
 | `RATE_LIMIT_PER_MINUTE` | `280` | Plafond d'appels amont par minute. |
 | `API_FOOTBALL_BASE_URL` | *(vide)* | Surcharge de l'URL amont, pour les tests hors ligne. |
+| `API_FOOTBALL_DAILY_LIMIT` | `7500` | Plafond d'appels par jour de votre plan. |
+| `COLLECTOR_ADMIN_TOKEN` | *(vide)* | Jeton exigé pour lancer une collecte depuis l'interface. Vide = lancement désactivé. |
+| `COLLECTOR_DB` | `data/batscores.db` | Emplacement de la base du collecteur. |
 
 **Quel fournisseur choisir ?** Si votre tableau de bord est sur
 `dashboard.api-football.com`, gardez `apisports`. Si vous avez souscrit depuis
@@ -118,6 +121,12 @@ npm run collect -- plan --league 61 --season 2023 --profile complet  # chiffre l
 npm run collect -- run  --league 61 --season 2023 --profile complet  # collecte
 npm run collect -- status                                            # etat
 ```
+
+Le collecteur se pilote aussi depuis l'application, page **Collecte**
+(`#/collecte`) : quota du jour, avancement, journal en direct, estimation du
+cout, lancement et arret. Le lancement est desactive tant que
+`COLLECTOR_ADMIN_TOKEN` n'est pas defini dans `.env` — une instance publique ne
+doit pas laisser n'importe qui consommer votre quota.
 
 Deux proprietes en font le coeur :
 
@@ -200,7 +209,7 @@ server/
   apiFootball.js   client amont : cache, deduplication, limiteur de debit
   cache.js         cache memoire TTL
   normalize.js     mise en forme des reponses, regroupement, ordre d'affichage
-  routes/          fixtures, competitions, equipes, recherche, sante
+  routes/          fixtures, competitions, equipes, recherche, sante, collecteur
 public/
   index.html       shell de l'application
   css/styles.css   theme sombre
@@ -212,7 +221,7 @@ public/
     components.js  fragments de rendu partages
     i18n.js        traduction des libelles du fournisseur
     utils.js       formatage des dates, scores, statuts
-    views/         matchs, direct, fiche match, competitions, equipe, recherche, favoris
+    views/         matchs, direct, fiche match, competitions, equipe, recherche, favoris, collecte
   sw.js            service worker (shell uniquement, jamais les scores)
 collector/
   schema.sql       28 tables : archive brute, file de travail, donnees normalisees
