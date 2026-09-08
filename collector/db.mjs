@@ -58,13 +58,24 @@ export function enqueue(db, { kind, endpoint, params, scope = null, priority = 1
   return true;
 }
 
-export function nextTasks(db, limit = 1) {
+/**
+ * Prochaines taches a executer.
+ * @param {Set<string>|null} kinds restreint aux types donnes (profil courant).
+ */
+export function nextTasks(db, limit = 1, kinds = null) {
+  if (!kinds) {
+    return db.prepare(`
+      SELECT * FROM tasks WHERE state = 'pending'
+      ORDER BY priority ASC, id ASC LIMIT ?
+    `).all(limit);
+  }
+  const list = [...kinds];
+  if (!list.length) return [];
+  const holes = list.map(() => '?').join(', ');
   return db.prepare(`
-    SELECT * FROM tasks
-    WHERE state = 'pending'
-    ORDER BY priority ASC, id ASC
-    LIMIT ?
-  `).all(limit);
+    SELECT * FROM tasks WHERE state = 'pending' AND kind IN (${holes})
+    ORDER BY priority ASC, id ASC LIMIT ?
+  `).all(...list, limit);
 }
 
 export function markTask(db, id, state, error = null) {

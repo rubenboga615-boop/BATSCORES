@@ -21,7 +21,7 @@ async function registerSuite() {
 const { startSeasonMock } = await import('./mock-season.mjs');
 const { openDatabase, taskCounts, callsToday, retryFailed } = await import('../collector/db.mjs');
 const { Client } = await import('../collector/client.mjs');
-const { seedPlan, estimate, scopeOf } = await import('../collector/plan.mjs');
+const { seedPlan, estimate, scopeOf, allowedKinds } = await import('../collector/plan.mjs');
 const { runCollector } = await import('../collector/worker.mjs');
 const { deriveAll } = await import('../collector/derive.mjs');
 
@@ -65,6 +65,38 @@ describe('planification', () => {
     assert.equal(est.fixtureCount, 380);           // 20 * 19
     assert.equal(est.breakdown.perFixture, 380 * 4); // 4 endpoints par rencontre
     assert.equal(callsToday(db), 0, 'aucun appel consomme');
+  });
+
+  test('estimer ne cree aucune tache', () => {
+    // "plan" est annonce comme sans engagement. S'il semait la file, choisir un
+    // profil pour estimer reviendrait a l'imposer aux executions suivantes.
+    const db = newDb();
+    estimate(db, { league: LEAGUE, season: SEASON, profile: 'total' });
+    assert.equal(taskCounts(db).pending, 0, 'aucune tache creee par une estimation');
+  });
+
+  test('un profil econome n\'execute pas les taches d\'un profil plus large', async () => {
+    const db = newDb();
+    // Le profil large seme la file...
+    seedPlan(db, { league: LEAGUE, season: SEASON, profile: 'complet' });
+    const kindsSemees = new Set(
+      db.prepare("SELECT DISTINCT kind FROM tasks").all().map((r) => r.kind),
+    );
+    assert.ok(kindsSemees.has('season_injuries'), 'le profil complet demande les blessures');
+
+    // ...mais une execution en profil essentiel doit les laisser de cote.
+    await collect(db, newClient(db));
+    const restantes = db.prepare(
+      "SELECT DISTINCT kind FROM tasks WHERE state = 'pending'",
+    ).all().map((r) => r.kind);
+    assert.ok(restantes.includes('season_injuries'), 'les blessures restent en attente');
+
+    const faites = db.prepare(
+      "SELECT DISTINCT kind FROM tasks WHERE state = 'done'",
+    ).all().map((r) => r.kind);
+    for (const kind of faites) {
+      assert.ok(allowedKinds('essentiel').has(kind), `${kind} n'appartient pas au profil essentiel`);
+    }
   });
 
   test('les profils sont ordonnes du plus econome au plus complet', () => {

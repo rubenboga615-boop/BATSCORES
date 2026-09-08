@@ -183,6 +183,11 @@ function launchCard(data) {
              ${fmt(state.plan.fixtureCount)} rencontres · ${fmt(state.plan.teamCount)} equipes ·
              ${fmt(state.plan.breakdown.perFixture)} appels par rencontre au total
            </div>
+           ${state.plan.paginationKnown ? '' : `
+             <div class="stat__label" style="margin-top:6px;color:var(--warn)">
+               /players est pagine et n'a pas encore ete appele : comptez quelques
+               dizaines d'appels de plus pour un grand championnat.
+             </div>`}
          </div>`
       : '';
 

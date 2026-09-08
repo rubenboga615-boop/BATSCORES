@@ -70,6 +70,25 @@ const SEASON_ENDPOINTS = {
 export const scopeOf = (league, season) => `league:${league}|season:${season}`;
 
 /**
+ * Types de taches appartenant a un profil.
+ *
+ * Sans ce filtre, une execution en profil "essentiel" viderait la file entiere,
+ * y compris des taches ajoutees plus tot par un profil plus large : le choix du
+ * profil au lancement n'aurait alors aucun effet sur le quota depense.
+ */
+export function allowedKinds(profile) {
+  const spec = PROFILES[profile];
+  if (!spec) throw new Error(`Profil inconnu : ${profile}`);
+  return new Set([
+    'league', 'teams', 'fixtures',
+    ...spec.seasonWide.map((n) => `season_${n}`),
+    ...spec.perFixture.map((n) => `fixture_${n}`),
+    ...spec.perTeam.map((n) => `team_${n}`),
+    ...spec.perPlayer.map((n) => `player_${n}`),
+  ]);
+}
+
+/**
  * Premiere vague : ce qui peut etre demande sans rien connaitre d'autre.
  * Les priorites font remonter le socle (ligue, equipes, calendrier) en tete,
  * car tout le reste en depend.
@@ -182,13 +201,36 @@ export function estimate(db, { league, season, profile = 'complet', assumedTeams
   const fixtures = readRaw(db, '/fixtures', { league, season });
   const teams = readRaw(db, '/teams', { league, season });
 
+  // Certains endpoints de saison sont pagines : /players a lui seul peut
+  // compter des dizaines de pages, donc autant d'appels. Compter une page
+  // unique sous-estimerait lourdement le cout.
+  const pagesSeen = (endpoint) => {
+    try {
+      return db.prepare(`
+        SELECT COUNT(*) AS n FROM raw_responses
+        WHERE endpoint = ? AND params_key LIKE ? AND params_key LIKE ?
+      `).get(endpoint, `%league=${league}%`, `%season=${season}%`).n;
+    } catch {
+      return 0;
+    }
+  };
+
   // Championnat aller-retour : n * (n - 1) rencontres.
   const fixtureCount = fixtures ? fixtures.length : assumedTeams * (assumedTeams - 1);
   const teamCount = teams ? teams.length : assumedTeams;
   const known = Boolean(fixtures && teams);
 
   const base = 3; // /leagues, /teams, /fixtures
-  const seasonWide = spec.seasonWide.length;
+
+  // Une page par endpoint de saison, sauf pour ceux dont on a deja constate
+  // qu'ils en comptent plusieurs.
+  let paginationKnown = true;
+  const seasonWide = spec.seasonWide.reduce((total, name) => {
+    if (name !== 'players') return total + 1;
+    const pages = pagesSeen('/players');
+    if (pages === 0) paginationKnown = false;
+    return total + Math.max(1, pages);
+  }, 0);
   const perFixture = fixtureCount * spec.perFixture.length;
   const perTeam = teamCount * spec.perTeam.length;
   // Les endpoints par joueur ne sont chiffrables qu'une fois les effectifs
@@ -201,6 +243,7 @@ export function estimate(db, { league, season, profile = 'complet', assumedTeams
   return {
     profile,
     known,
+    paginationKnown,
     fixtureCount,
     teamCount,
     breakdown: { base, seasonWide, perFixture, perTeam, perPlayer },

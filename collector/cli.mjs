@@ -10,7 +10,7 @@
 import 'dotenv/config';
 import { openDatabase, DEFAULT_DB_PATH, taskCounts, usageHistory, callsToday, retryFailed } from './db.mjs';
 import { Client } from './client.mjs';
-import { seedPlan, expandPlan, estimate, scopeOf, PROFILES } from './plan.mjs';
+import { estimate, scopeOf, PROFILES } from './plan.mjs';
 import { runCollector } from './worker.mjs';
 import { deriveAll } from './derive.mjs';
 
@@ -80,12 +80,12 @@ async function main() {
 
   if (command === 'plan') {
     const { league, season } = requireScope(opts);
-    const created = seedPlan(db, { league, season, profile });
-    expandPlan(db, { league, season, profile });
+    // Lecture pure : estimer ne doit rien engager. Creer les taches ici
+    // reviendrait a choisir le profil des l'estimation, et une execution
+    // ulterieure les executerait quel que soit le profil demande.
     const est = estimate(db, { league, season, profile });
 
     console.log(`\nPlan de collecte — competition ${league}, saison ${season}, profil "${profile}"\n`);
-    console.log(`  ${created} tache(s) de socle creee(s)`);
     console.log(est.known
       ? `  Base sur les donnees deja collectees : ${est.fixtureCount} rencontres, ${est.teamCount} equipes`
       : `  Estimation a priori : ${est.fixtureCount} rencontres, ${est.teamCount} equipes (calendrier pas encore telecharge)`);
@@ -97,6 +97,11 @@ async function main() {
     console.log(`    par joueur                         ${fmt(est.breakdown.perPlayer)}`);
     console.log(`    ----------------------------------------`);
     console.log(`    TOTAL                              ${fmt(est.total)} appels`);
+    if (!est.paginationKnown) {
+      console.log("\n  Note : /players est pagine et n'a pas encore ete appele ;");
+      console.log('  le total ne compte qu\'une page. Comptez quelques dizaines');
+      console.log('  d\'appels supplementaires pour un grand championnat.');
+    }
 
     const days = est.total / DAILY_LIMIT;
     console.log(`\n  Soit ${(days).toFixed(1)} jour(s) de quota a ${fmt(DAILY_LIMIT)} appels/jour.`);

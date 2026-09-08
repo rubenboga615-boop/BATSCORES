@@ -38,7 +38,7 @@ npm run collect -- status
 
 | Commande | Role |
 | --- | --- |
-| `plan` | Estime le nombre d'appels necessaires, sans en consommer un seul |
+| `plan` | Estime le nombre d'appels necessaires. Lecture pure : n'engage rien et ne cree aucune tache |
 | `run` | Lance ou reprend la collecte |
 | `derive` | Reconstruit les tables normalisees depuis l'archive brute |
 | `status` | File d'attente, quota consomme, volumetrie de la base |
@@ -90,6 +90,15 @@ se multiplie par le nombre de matchs de la saison.
 | `essentiel` | faits, compositions, statistiques | ~1 150 appels |
 | `complet` | + statistiques par joueur | ~1 590 appels |
 | `total` | + pronostics, cotes, transferts, palmares | ~14 000 appels |
+
+Le profil choisi au lancement filtre aussi l'execution : des taches ajoutees
+par un profil plus large restent en attente au lieu d'etre executees. Passer de
+`complet` a `essentiel` reduit donc reellement le quota depense, meme si la file
+contient deja des taches du profil large.
+
+Attention aux endpoints pagines : `/players` compte une page par tranche de 20
+joueurs, soit plus de quarante appels pour un championnat a 20 equipes. Tant
+qu'il n'a jamais ete appele, l'estimation n'en compte qu'une seule et le signale.
 
 `complet` est le defaut, et le bon compromis dans la plupart des cas.
 `total` n'a d'interet que si les cotes et les palmares individuels vous servent

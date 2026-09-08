@@ -10,7 +10,7 @@ import {
   nextTasks, markTask, taskCounts, enqueue, paramsKey,
   startRun, finishRun, callsToday,
 } from './db.mjs';
-import { seedPlan, expandPlan, scopeOf } from './plan.mjs';
+import { seedPlan, expandPlan, scopeOf, allowedKinds } from './plan.mjs';
 
 /**
  * @param {object} options
@@ -36,6 +36,11 @@ export async function runCollector({
   const runId = startRun(db, { scope, profile });
   const startCalls = client.callsThisRun;
 
+  // Le profil filtre l'execution, pas seulement la planification : des taches
+  // ajoutees par un profil plus large restent en attente au lieu d'etre
+  // executees ici, et donc de depenser un quota que l'on ne voulait pas.
+  const kinds = allowedKinds(profile);
+
   let done = 0;
   let failed = 0;
   let stopReason = 'termine';
@@ -48,7 +53,7 @@ export async function runCollector({
 
   try {
     collecte: for (;;) {
-      const batch = nextTasks(db, 25);
+      const batch = nextTasks(db, 25, kinds);
 
       if (!batch.length) {
         // Plus rien en attente : de nouvelles taches ont-elles pu naitre des
