@@ -6,6 +6,10 @@ Application de scores de football en direct, dans l'esprit de FlashScore, propul
 Resultats en direct, calendriers, classements, compositions, statistiques et
 confrontations directes — en francais, sur ordinateur comme sur mobile.
 
+Le depot contient aussi un **collecteur de donnees** qui constitue une base
+historique interrogeable a partir de la meme cle API : voir
+[`collector/README.md`](collector/README.md).
+
 ## Fonctionnalites
 
 - **Matchs du jour** groupes par competition, avec navigation sur 7 jours et filtres
@@ -103,6 +107,31 @@ Le frontend consomme ces routes ; elles sont aussi utilisables directement.
 | `GET /api/teams/:id` | Fiche equipe. |
 | `GET /api/search?q=` | Recherche equipes et competitions. |
 
+## Collecteur de donnees
+
+Fonctionnalite distincte de l'application web : elle archive l'integralite de
+ce qu'API-Football expose pour une competition et une saison, dans une base
+SQLite interrogeable.
+
+```bash
+npm run collect -- plan --league 61 --season 2023 --profile complet  # chiffre le cout
+npm run collect -- run  --league 61 --season 2023 --profile complet  # collecte
+npm run collect -- status                                            # etat
+```
+
+Deux proprietes en font le coeur :
+
+- **Rien n'est perdu.** Chaque reponse est archivee telle quelle ; les tables
+  normalisees en sont derivees et peuvent etre enrichies puis reconstruites
+  plus tard, sans redepenser un seul appel.
+- **La reprise est garantie.** L'etat vit en base : quota epuise, coupure
+  reseau ou machine redemarree, relancer la meme commande repart exactement ou
+  la collecte s'etait arretee.
+
+Le collecteur exige **Node 22 ou superieur** (module `node:sqlite`), alors que
+l'application web fonctionne des Node 20. Details, profils de collecte et
+budget de quota : [`collector/README.md`](collector/README.md).
+
 ## Tests
 
 ```bash
@@ -117,10 +146,15 @@ y compris ses particularites : enveloppe `{ errors, response }`, tableau de tabl
 pour les classements, possession exprimee en pourcentage textuel. Les tests sont donc
 deterministes, executables hors ligne, et ne consomment aucun quota.
 
-Couverture : 27 tests backend (groupement et ordre des competitions, phases de
+Couverture : 41 tests backend (groupement et ordre des competitions, phases de
 statut, agregation de la fiche de match, classement, buteurs, recherche, favoris,
-efficacite du cache, cle absente, cle refusee, panne du fournisseur) et 34 tests
-d'interface joues deux fois, en bureau et en mobile.
+efficacite du cache, cle absente, cle refusee, panne du fournisseur, et pour le
+collecteur : planification, reprise apres interruption, arret sur quota,
+derivation rejouable) et 34 tests d'interface joues deux fois, en bureau et en
+mobile.
+
+Les tests du collecteur sont automatiquement ignores sous Node 20, qui ne
+fournit pas `node:sqlite`.
 
 Les tests navigateur ont besoin de Chromium :
 
@@ -180,11 +214,21 @@ public/
     utils.js       formatage des dates, scores, statuts
     views/         matchs, direct, fiche match, competitions, equipe, recherche, favoris
   sw.js            service worker (shell uniquement, jamais les scores)
+collector/
+  schema.sql       28 tables : archive brute, file de travail, donnees normalisees
+  db.mjs           acces SQLite, file de taches, comptabilite du quota
+  client.mjs       client API : limitation de debit, reprises, archivage brut
+  plan.mjs         profils de collecte et estimation du cout
+  worker.mjs       boucle d'execution reprenable
+  derive.mjs       archive brute -> tables normalisees
+  cli.mjs          ligne de commande
 test/
   mock-api.mjs     faux fournisseur API-Football
   api.test.mjs     tests des routes du backend
   errors.test.mjs  tests des chemins d'erreur, chacun dans un processus isole
   stack.mjs        pile faux fournisseur + application, pour les tests navigateur
+  mock-season.mjs  faux fournisseur simulant une saison complete
+  collector.test.mjs tests du collecteur
   e2e/             tests d'interface Playwright
 .github/workflows/
   ci.yml           integration continue
