@@ -222,7 +222,7 @@ public/
     i18n.js        traduction des libelles du fournisseur
     utils.js       formatage des dates, scores, statuts
     views/         matchs, direct, fiche match, competitions, equipe, recherche, favoris, collecte
-  sw.js            service worker (shell uniquement, jamais les scores)
+  sw.js            service worker : reseau d'abord, cache en secours hors ligne
 collector/
   schema.sql       28 tables : archive brute, file de travail, donnees normalisees
   lock.mjs         verrou partage : une seule collecte a la fois
