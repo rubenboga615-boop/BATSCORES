@@ -17,7 +17,9 @@ import { renderTeam } from './views/team.js';
 import { renderPlayer, bindPlayerEvents } from './views/player.js';
 import { renderSearch } from './views/search.js';
 import { renderCompare } from './views/compare.js';
+import { renderNews } from './views/news.js';
 import { renderCollector, bindCollectorEvents, refreshCollector } from './views/collector.js';
+import { enableNotifications, disableNotifications, syncFollowedFixtures } from './notifications.js';
 
 const root = document.getElementById('app');
 
@@ -33,6 +35,7 @@ route('/joueur/:id', (ctx) => renderPlayer(root, ctx));
 route('/favoris', () => renderFavorites(root));
 route('/recherche', (ctx) => renderSearch(root, ctx));
 route('/comparer', (ctx) => renderCompare(root, ctx));
+route('/actus', () => renderNews(root));
 route('/collecte', () => renderCollector(root));
 
 setNotFound(() => {
@@ -53,6 +56,12 @@ root.addEventListener('click', (event) => {
   // propre destination sans declencher l'action de la zone. C'etait le role
   // d'un `onclick` en ligne, incompatible avec la politique de securite.
   if (event.target.closest('[data-standalone-link]')) return;
+
+  const notifications = event.target.closest('[data-notifications]');
+  if (notifications) {
+    handleNotificationToggle(notifications);
+    return;
+  }
 
   const star = event.target.closest('[data-star]');
   if (star) {
@@ -108,6 +117,35 @@ document.addEventListener('error', (event) => {
   if (img instanceof HTMLImageElement) img.style.visibility = 'hidden';
 }, true);
 
+/**
+ * Activation ou desactivation des notifications.
+ *
+ * Le bouton reste bloque pendant l'operation : l'autorisation du navigateur
+ * ouvre une bulle systeme, et deux clics enchaines lanceraient deux
+ * abonnements concurrents.
+ */
+async function handleNotificationToggle(button) {
+  const feedback = document.getElementById('notif-feedback');
+  const wanted = button.dataset.notifications === 'on';
+  button.disabled = true;
+  if (feedback) feedback.textContent = wanted ? 'Activation...' : 'Desactivation...';
+
+  try {
+    const result = wanted ? await enableNotifications() : await disableNotifications();
+    if (result.ok) {
+      // On redessine la page pour refleter le nouvel etat reel, relu du
+      // navigateur plutot que suppose.
+      resolve();
+    } else if (feedback) {
+      feedback.textContent = result.reason || 'Activation impossible.';
+      button.disabled = false;
+    }
+  } catch (err) {
+    if (feedback) feedback.textContent = err.message || 'Activation impossible.';
+    button.disabled = false;
+  }
+}
+
 // Accessibilite clavier sur les lignes cliquables.
 root.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -140,9 +178,10 @@ function highlightNav() {
   const key = path === '/' ? 'matches'
     : path.startsWith('/live') ? 'live'
       : path.startsWith('/competition') ? 'competitions'
-        : path.startsWith('/favoris') ? 'favorites'
-          : path.startsWith('/collecte') ? 'collector'
-            : '';
+        : path.startsWith('/actus') ? 'news'
+          : path.startsWith('/favoris') ? 'favorites'
+            : path.startsWith('/collecte') ? 'collector'
+              : '';
   document.querySelectorAll('[data-nav]').forEach((el) => {
     el.classList.toggle('is-active', el.dataset.nav === key);
   });
@@ -162,6 +201,11 @@ function paintFavBadge() {
 }
 store.onChange(paintFavBadge);
 paintFavBadge();
+
+// La liste des matchs suivis vit dans le navigateur ; le serveur en a besoin
+// pour savoir quoi surveiller. On la lui transmet a chaque changement, sans
+// bloquer l'interface et sans rien envoyer si les notifications sont eteintes.
+store.onChange(() => { syncFollowedFixtures().catch(() => {}); });
 
 async function paintLiveBadge() {
   try {

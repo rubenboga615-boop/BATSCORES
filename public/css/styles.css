@@ -897,7 +897,10 @@ pre.log {
 
   .tab-bar {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    /* Le nombre de colonnes suit le nombre d'entrees : une valeur figee
+       renvoyait la sixieme a la ligne, hors de la barre. */
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     position: fixed;
     bottom: 0; left: 0; right: 0;
     height: var(--tab-bar-h);
@@ -915,6 +918,9 @@ pre.log {
     font-weight: 600;
   }
   .tab-bar a.is-active { color: var(--accent); }
+  /* A six entrees sur un ecran etroit, les libelles se serrent plutot que de
+     deborder les uns sur les autres. */
+  .tab-bar span { font-size: 9px; letter-spacing: -0.2px; }
 
   .lineups { grid-template-columns: 1fr; }
   .match { grid-template-columns: 48px 1fr auto 28px; padding: 8px 10px; }
@@ -1108,4 +1114,44 @@ pre.log {
   .odd__spark { display: none; }
   .versus { grid-template-columns: 52px 1fr 52px; }
   .minute-bars { padding: 12px 6px; gap: 4px; }
+}
+
+/* ----------------------------- Notifications ------------------------------- */
+
+.notif-feedback {
+  margin-left: 10px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.filter[disabled] { opacity: 0.6; cursor: progress; }
+
+/* ------------------------------- Actualites -------------------------------- */
+
+.news {
+  display: block;
+  position: relative;
+  padding: 12px 34px 12px 14px;
+  border-top: 1px solid var(--border);
+  color: inherit;
+}
+.news:first-child { border-top: none; }
+a.news:hover { background: var(--bg-hover); }
+.news__title { font-weight: 700; font-size: 14px; line-height: 1.35; }
+.news__summary {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.news__meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.news__out {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: var(--text-faint);
+  font-size: 13px;
 }

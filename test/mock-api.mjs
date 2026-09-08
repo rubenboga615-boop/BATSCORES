@@ -133,6 +133,13 @@ const standingRow = (rank, id, name, points, description) => {
 const ENDPOINTS = {
   '/fixtures': (params) => {
     if (params.get('live') === 'all') return [LIVE];
+    // Lecture par lot : le veilleur de notifications s'en sert pour suivre
+    // vingt rencontres en un seul appel.
+    if (params.get('ids')) {
+      const wanted = new Set(String(params.get('ids')).split('-').map(Number));
+      return [FINISHED, LIVE, SCHEDULED, POSTPONED, UPCOMING]
+        .filter((f) => wanted.has(f.fixture.id));
+    }
     if (params.get('id')) {
       // Une recherche par identifiant doit rendre la rencontre telle qu'elle
       // apparait dans la liste, statut compris — sinon un match annonce a

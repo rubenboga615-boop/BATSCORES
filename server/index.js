@@ -1,7 +1,25 @@
 import { createApp } from './app.js';
-import { config, hasApiKey, isPlaceholderKey } from './config.js';
+import { config, hasApiKey, isPlaceholderKey, pushEnabled } from './config.js';
+import { PushStore } from './pushStore.js';
+import { MatchWatcher } from './pushWatcher.js';
+import { sendNotification } from './webpush.js';
+import { apiGet } from './apiFootball.js';
 
-const app = createApp();
+// Le magasin d'abonnements est partage entre les routes et le veilleur : deux
+// instances liraient le meme fichier sans jamais voir les ecritures de l'autre.
+const pushStore = new PushStore();
+const app = createApp({ pushStore });
+
+const watcher = pushEnabled()
+  ? new MatchWatcher({
+    store: pushStore,
+    apiGet,
+    send: (record, payload, vapid) => sendNotification(record, payload, vapid),
+    vapid: config.vapid,
+    timezone: config.defaultTimezone,
+    log: (message) => console.log(`[batscores] ${message}`),
+  })
+  : null;
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`BATSCORES demarre sur http://${config.host}:${config.port}`);
@@ -11,6 +29,12 @@ const server = app.listen(config.port, config.host, () => {
     console.log('  note        : ecoute sur toutes les interfaces. Derriere un proxy');
     console.log('                inverse, posez HOST=127.0.0.1 pour que le port ne soit');
     console.log('                joignable que par le proxy.');
+  }
+  if (watcher) {
+    watcher.start();
+    console.log(`  push        : actif, ${pushStore.size} appareil(s) abonne(s)`);
+  } else {
+    console.log('  push        : inactif (cles VAPID absentes, voir npm run vapid)');
   }
   if (!hasApiKey()) {
     console.warn(isPlaceholderKey()
@@ -28,6 +52,7 @@ const server = app.listen(config.port, config.host, () => {
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
     console.log(`\n${signal} recu, arret en cours...`);
+    watcher?.stop();
     server.close(() => process.exit(0));
     // Filet de securite si une connexion tenue empeche la fermeture.
     setTimeout(() => process.exit(0), 10_000).unref();

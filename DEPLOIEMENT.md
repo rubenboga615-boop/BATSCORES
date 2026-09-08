@@ -301,7 +301,64 @@ Puis `pm2 restart batscores`. Laissez ce champ vide si votre site est public.
 
 ---
 
-## 9. Sauvegarder
+## 9. Activer les notifications
+
+Elles sont eteintes tant que vous n'avez pas genere de cles.
+
+```bash
+cd ~/BATSCORES
+npm run vapid
+```
+
+Collez les trois lignes affichees a la fin de votre `.env`, en remplacant
+l'adresse par la votre, puis :
+
+```bash
+pm2 restart batscores
+```
+
+Sur le site, allez dans **Favoris** : un bouton « Activer les notifications »
+apparait. Le navigateur demandera l'autorisation ; une fois accordee, vous
+recevrez le coup d'envoi, les buts, la mi-temps et le resultat final de vos
+matchs suivis, meme application fermee.
+
+Trois points a savoir :
+
+- **HTTPS obligatoire.** Les notifications ne fonctionnent pas en HTTP, sauf sur
+  `localhost`. Si vous n'avez pas encore de domaine, le bouton echouera.
+- **Sur iPhone**, il faut d'abord ajouter BATSCORES a l'ecran d'accueil
+  (bouton Partager, « Sur l'ecran d'accueil »). Safari ne gere les
+  notifications que pour les applications ainsi installees.
+- **Ne regenerez pas les cles.** Tous les appareils deja abonnes cesseraient de
+  recevoir quoi que ce soit et devraient se reabonner.
+
+Le fichier `data/push-subscriptions.json` contient la liste des appareils. Le
+supprimer desabonne tout le monde ; c'est sans danger.
+
+### Ce que cela coute en quota
+
+Le veilleur ne consulte le fournisseur que si une rencontre suivie est en cours
+ou commence dans les dix minutes. Le reste du temps, il se rendort sans depenser
+un appel. Pendant un match, c'est un appel par minute pour l'ensemble des
+rencontres suivies — pas un par match. Un week-end charge coute quelques
+centaines d'appels sur les 7 500 quotidiens.
+
+## 10. Choisir ses sources d'actualites
+
+La page **Actus** lit des flux RSS. Sans reglage, elle utilise trois sources
+francaises. Pour choisir les votres, ajoutez a `.env` :
+
+```
+NEWS_FEEDS=L'Equipe|https://www.lequipe.fr/rss/actu_rss_Football.xml,Mon Media|https://exemple.fr/rss
+```
+
+Les entrees sont separees par des virgules, jamais par des espaces — les noms
+de sources en contiennent. Puis `pm2 restart batscores`.
+
+Ces flux sont lus par le serveur, pas par le navigateur : la page ne suit
+aucune adresse fournie par un visiteur.
+
+## 11. Sauvegarder
 
 Ce qui a de la valeur, c'est la base collectee : elle represente des milliers
 d'appels payes.
@@ -320,6 +377,9 @@ mkdir -p ~/sauvegardes
 sudo apt install -y sqlite3
 ```
 
+Sauvegardez aussi `data/push-subscriptions.json` si vous tenez a ne pas obliger
+vos utilisateurs a se reabonner apres une reinstallation.
+
 Puis rapatriez de temps en temps une copie sur votre machine :
 
 ```bash
@@ -331,7 +391,7 @@ scp batscores@203.0.113.42:~/sauvegardes/batscores-*.db .
 
 ---
 
-## 10. En cas de panne
+## 12. En cas de panne
 
 | Symptome | Verifier |
 | --- | --- |
@@ -340,6 +400,8 @@ scp batscores@203.0.113.42:~/sauvegardes/batscores-*.db .
 | Certificat absent | `dig +short votre-domaine` renvoie-t-il bien l'IP ? puis `sudo journalctl -u caddy -n 50` |
 | Quota epuise | `npm run collect -- status` affiche la consommation du jour |
 | Disque plein | `df -h` ; la base grossit, les journaux PM2 aussi (`pm2 flush`) |
+| Bouton de notification absent | Site en HTTPS ? Cles VAPID dans `.env` ? `pm2 restart batscores` |
+| Page Actus vide | `curl -s localhost:3000/api/news \| head` ; une source en panne est nommee dans la reponse |
 
 ---
 

@@ -6,9 +6,36 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import http from 'node:http';
 import { startMockApi } from './mock-api.mjs';
 
 const mock = await startMockApi();
+
+/**
+ * Faux flux d'actualites. Sans lui, la page Actus irait interroger de vraies
+ * redactions : les essais dependraient d'Internet et de ce qui a ete publie
+ * ce jour-la.
+ */
+const feed = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' });
+  res.end(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>Faux Journal</title>
+  <item>
+    <title><![CDATA[Le PSG s'impose 3-1 face à l'OM]]></title>
+    <link>https://exemple.fr/article/1</link>
+    <description>Dembélé a ouvert le score dès la 23e minute.</description>
+    <pubDate>${new Date(Date.now() - 3600_000).toUTCString()}</pubDate>
+  </item>
+  <item>
+    <title>Mercato : l'OL cible un lat&eacute;ral</title>
+    <link>https://exemple.fr/article/2</link>
+    <description>Deux pistes &agrave; suivre cet hiver.</description>
+    <pubDate>${new Date(Date.now() - 5 * 3600_000).toUTCString()}</pubDate>
+  </item>
+</channel></rss>`);
+});
+await new Promise((r) => feed.listen(0, '127.0.0.1', r));
 
 // Base de collecte dans un dossier temporaire : la page "Collecte" affiche
 // ainsi le meme etat en local et en integration continue, quel que soit le
@@ -23,6 +50,7 @@ process.env.DEFAULT_TIMEZONE = 'Europe/Paris';
 // autorisation, la politique de securite les bloquerait et les essais
 // navigateur signaleraient des erreurs qui n'existent pas en production.
 process.env.CSP_EXTRA_IMG_HOSTS = 'https://media.example';
+process.env.NEWS_FEEDS = `Faux Journal|http://127.0.0.1:${feed.address().port}/rss`;
 process.env.API_FOOTBALL_DAILY_LIMIT = '7500';
 process.env.COLLECTOR_DB = collectorDb;
 process.env.PORT = process.env.E2E_PORT || '4600';
@@ -123,10 +151,12 @@ app.listen(Number(process.env.PORT), '127.0.0.1', () => {
   console.log(`pile de test prete sur http://127.0.0.1:${process.env.PORT}`);
   console.log(`  faux fournisseur : ${mock.url}`);
   console.log(`  base de collecte : ${collectorDb}`);
+  console.log(`  faux flux RSS    : http://127.0.0.1:${feed.address().port}/rss`);
 });
 
 const shutdown = async () => {
   await mock.close();
+  await new Promise((r) => feed.close(r));
   fs.rmSync(collectorDir, { recursive: true, force: true });
   process.exit(0);
 };

@@ -13,6 +13,9 @@ import { playersRouter } from './routes/players.js';
 import { predictRouter } from './routes/predict.js';
 import { oddsRouter } from './routes/odds.js';
 import { compareRouter } from './routes/compare.js';
+import { createPushRouter } from './routes/push.js';
+import { PushStore } from './pushStore.js';
+import { newsRouter } from './routes/news.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, '..', 'public');
@@ -54,7 +57,13 @@ function securityHeaders(req, res, next) {
  * Separer la construction de l'ecoute permet aux tests de demarrer
  * l'application sur un port ephemere.
  */
-export function createApp() {
+/**
+ * @param {object} [options]
+ * @param {import('./pushStore.js').PushStore} [options.pushStore]
+ *        Injecte par les tests et par le point d'entree, qui le partage avec
+ *        le veilleur : deux instances liraient le meme fichier sans se voir.
+ */
+export function createApp({ pushStore = new PushStore() } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (config.trustProxy) app.set('trust proxy', 1);
@@ -68,6 +77,8 @@ export function createApp() {
   app.use('/api/predict', predictRouter);
   app.use('/api/odds', oddsRouter);
   app.use('/api/compare', compareRouter);
+  app.use('/api/push', createPushRouter(pushStore));
+  app.use('/api/news', newsRouter);
   app.use('/api/collector', collectorRouter);
   app.use('/api', miscRouter);
 

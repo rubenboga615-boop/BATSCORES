@@ -55,7 +55,24 @@ export const config = {
     ...(process.env.CSP_EXTRA_IMG_HOSTS || '').split(/\s+/).filter(Boolean),
   ],
   rateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE) || 280,
+
+  /**
+   * Notifications push. Sans paire de cles VAPID, la fonction reste eteinte :
+   * l'interface le dit et ne propose rien, plutot que d'echouer au moment ou
+   * l'utilisateur accepte les notifications.
+   */
+  vapid: {
+    publicKey: (process.env.VAPID_PUBLIC_KEY || '').trim(),
+    privateKey: (process.env.VAPID_PRIVATE_KEY || '').trim(),
+    // Le service de push exige un moyen de contact pour signaler un abus.
+    subject: (process.env.VAPID_SUBJECT || '').trim(),
+  },
 };
+
+/** Les notifications ne sont proposees que si tout est renseigne. */
+export const pushEnabled = () => Boolean(
+  config.vapid.publicKey && config.vapid.privateKey && config.vapid.subject,
+);
 
 /**
  * Valeurs d'exemple du fichier .env.example. Les laisser telles quelles est

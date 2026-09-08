@@ -36,6 +36,58 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/* ------------------------------ Notifications ------------------------------ */
+
+/**
+ * Un message push arrive meme quand aucun onglet n'est ouvert : c'est le
+ * service worker qui l'affiche. Le corps est dechiffre par le navigateur
+ * avant d'arriver ici.
+ */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: 'BATSCORES', body: event.data ? event.data.text() : '' };
+  }
+
+  const title = data.title || 'BATSCORES';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    // Une etiquette par rencontre : un deuxieme but remplace l'avis precedent
+    // au lieu d'empiler les bulles pour le meme match.
+    tag: data.tag || 'batscores',
+    renotify: true,
+    data: { url: data.url || '/' },
+    // Une vibration courte sur un but, rien sur le reste.
+    vibrate: data.kind === 'goal' ? [80, 40, 80] : undefined,
+  }));
+});
+
+/**
+ * Au clic, on ramene l'onglet deja ouvert sur la bonne page plutot que d'en
+ * ouvrir un de plus a chaque notification.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || '/';
+
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      if (new URL(client.url).origin === self.location.origin) {
+        await client.navigate(target).catch(() => {});
+        return client.focus();
+      }
+    }
+    return self.clients.openWindow(target);
+  })());
+});
+
+/* --------------------------------- Reseau ---------------------------------- */
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;

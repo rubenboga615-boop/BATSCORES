@@ -35,6 +35,10 @@ historique interrogeable a partir de la meme cle API : voir
 - **Quatre classements individuels** : buteurs, passeurs, cartons jaunes, cartons rouges.
 - **Classement general, a domicile et a l'exterieur**, rang et points recalcules.
 - **Recherche** d'equipes et de competitions.
+- **Notifications** : coup d'envoi, buts, mi-temps et resultat final de vos matchs
+  suivis, meme application fermee. Rien d'autre n'est envoye.
+- **Actualites** : les articles de sources RSS choisies par l'exploitant du serveur,
+  fusionnes et dates.
 - **Favoris** : suivez des matchs et des competitions ; tout reste sur votre appareil.
 - **PWA** : installable sur mobile, avec demarrage instantane hors ligne du shell.
 
@@ -127,6 +131,10 @@ Le frontend consomme ces routes ; elles sont aussi utilisables directement.
 | `GET /api/predict/:id` | Pronostic : moteur du fournisseur et modele maison. |
 | `GET /api/odds/:id` | Cotes archivees, probabilites nettes de marge et derive. |
 | `GET /api/compare?a=&b=&league=&season=` | Comparaison de deux equipes. |
+| `GET /api/news` | Articles des sources RSS configurees. Aucun quota consomme. |
+| `GET /api/push/key` | Cle publique VAPID, ou raison de l'indisponibilite. |
+| `POST /api/push/subscribe` | Enregistre un appareil et les rencontres qu'il suit. |
+| `POST /api/push/unsubscribe` | Oublie un appareil. |
 | `GET /api/search?q=` | Recherche equipes et competitions. |
 
 ## Collecteur de donnees
@@ -229,6 +237,40 @@ Quatre points a respecter :
 Fichiers fournis : `ecosystem.config.cjs` (PM2) et `Caddyfile.exemple` (proxy inverse
 et certificat automatique).
 
+### Notifications
+
+Elles sont eteintes par defaut. Pour les activer :
+
+```bash
+npm run vapid          # genere la paire de cles, une seule fois
+```
+
+Collez les trois lignes affichees dans `.env`, puis redemarrez. Tant que les cles
+sont absentes, l'interface l'annonce au lieu de proposer un bouton qui echouerait.
+
+Le protocole est implemente directement sur `node:crypto` (`server/webpush.js`) :
+chiffrement RFC 8291 et authentification VAPID RFC 8292. La bibliotheque usuelle
+aurait ajoute quatorze paquets transitifs a un projet qui en compte trois — autant
+de mises a jour a suivre sur le serveur. Le chiffrement est verifie par aller-retour
+dans les tests : un message chiffre puis dechiffre avec les cles d'un faux abonnement
+prouve que le navigateur saura le lire.
+
+**Cout en quota.** Le veilleur n'interroge le fournisseur que si au moins une
+rencontre suivie est en cours ou commence dans les dix minutes ; sinon il se rendort
+sans depenser un appel. Les rencontres suivies partent par lots de vingt en un seul
+appel. Une rencontre terminee depuis trois heures sort automatiquement des listes.
+
+### Actualites
+
+`NEWS_FEEDS` declare les sources, au format `Nom|https://...`, separees par des
+virgules ou des retours a la ligne. Les flux sont lus **par le serveur** : une
+adresse fournie par un visiteur n'est jamais suivie, sans quoi l'application
+deviendrait un relai vers n'importe quelle machine, y compris sur son reseau interne.
+
+Les vignettes des articles ne sont pas affichees : elles viendraient des serveurs des
+redactions, ce qui obligerait a ouvrir la politique de securite du contenu a toutes
+les origines et signalerait chaque lecture a ces redactions.
+
 ### En-tetes de securite
 
 `server/app.js` pose une politique de securite du contenu sans exception sur les
@@ -243,9 +285,14 @@ n'en est plus une. Les images du fournisseur sont autorisees explicitement ;
 ```
 DEPLOIEMENT.md     mise en ligne pas a pas (VPS, PM2, domaine, HTTPS)
 ecosystem.config.cjs configuration PM2 : un seul processus, deliberement
+scripts/vapid.mjs  generation des cles de notification
 Caddyfile.exemple  proxy inverse et certificat automatique
 server/
-  index.js         point d'entree : ecoute HOST:PORT, arret propre
+  index.js         point d'entree : ecoute HOST:PORT, veilleur, arret propre
+  webpush.js       Web Push sur node:crypto : chiffrement et VAPID
+  pushStore.js     abonnements, dans un fichier JSON (compatible Node 20)
+  pushWatcher.js   detecte buts et changements d'etat, previent les appareils
+  rss.js           lecture tolerante des flux RSS et Atom
   app.js           application Express : routes, en-tetes de securite, statiques
   config.js        lecture de l'environnement, choix du fournisseur
   apiFootball.js   client amont : cache, deduplication, limiteur de debit
@@ -264,8 +311,9 @@ public/
     i18n.js        traduction des libelles du fournisseur
     utils.js       formatage des dates, scores, statuts
     momentum.js    indice de pression reconstruit a partir des faits de match
+    notifications.js negociation de l'abonnement et synchronisation des favoris
     views/         matchs, direct, fiche match, competitions, equipe, joueur,
-                   recherche, favoris, comparateur, collecte
+                   recherche, favoris, comparateur, actualites, collecte
   sw.js            service worker : reseau d'abord, cache en secours hors ligne
 collector/
   schema.sql       29 tables : archive brute, file de travail, donnees normalisees
@@ -289,6 +337,9 @@ test/
   odds.test.mjs      tests de lecture des cotes
   momentum.test.mjs  tests de la courbe de pression
   analytics.test.mjs tests du comparateur et de la route des cotes
+  webpush.test.mjs   chiffrement Web Push, verifie par aller-retour
+  push.test.mjs      abonnements, veilleur et faits detectes
+  news.test.mjs      lecture des flux RSS et Atom
   e2e/             tests d'interface Playwright
 .github/workflows/
   ci.yml           integration continue
