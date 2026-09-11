@@ -19,6 +19,8 @@ import { renderSearch } from './views/search.js';
 import { renderCompare } from './views/compare.js';
 import { renderNews } from './views/news.js';
 import { renderCollector, bindCollectorEvents, refreshCollector } from './views/collector.js';
+import { renderOdds } from './views/odds.js';
+import { renderAlerts, bindAlertsEvents } from './views/alerts.js';
 import { enableNotifications, disableNotifications, syncFollowedFixtures } from './notifications.js';
 
 const root = document.getElementById('app');
@@ -37,6 +39,8 @@ route('/recherche', (ctx) => renderSearch(root, ctx));
 route('/comparer', (ctx) => renderCompare(root, ctx));
 route('/actus', () => renderNews(root));
 route('/collecte', () => renderCollector(root));
+route('/cotes', (ctx) => renderOdds(root, ctx));
+route('/alertes', () => renderAlerts(root));
 
 setNotFound(() => {
   root.innerHTML = emptyState('Page introuvable', 'Ce lien ne correspond a aucune page.', '🧭');
@@ -49,6 +53,7 @@ bindMatchDetailEvents(root);
 bindCompetitionEvents(root);
 bindCollectorEvents(root);
 bindPlayerEvents(root);
+bindAlertsEvents(root);
 
 // Ouverture d'un match ou d'une equipe depuis n'importe quelle liste.
 root.addEventListener('click', (event) => {
@@ -171,6 +176,32 @@ searchInput.addEventListener('input', debounce(() => {
   if (q.length >= 3) navigate(`/recherche?q=${encodeURIComponent(q)}`);
 }, 500));
 
+/* ---------------------------- Menu de debordement -------------------------- */
+
+const moreToggle = document.getElementById('more-toggle');
+const moreMenu = document.getElementById('more-menu');
+
+function closeMore() {
+  moreMenu.hidden = true;
+  moreToggle.setAttribute('aria-expanded', 'false');
+}
+
+moreToggle.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const open = moreMenu.hidden;
+  moreMenu.hidden = !open;
+  moreToggle.setAttribute('aria-expanded', String(open));
+});
+
+moreMenu.addEventListener('click', closeMore);
+document.addEventListener('click', (event) => {
+  if (!moreMenu.hidden && !moreMenu.contains(event.target)) closeMore();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeMore();
+});
+window.addEventListener('hashchange', closeMore);
+
 /* ------------------------------- Navigation -------------------------------- */
 
 function highlightNav() {
@@ -178,10 +209,11 @@ function highlightNav() {
   const key = path === '/' ? 'matches'
     : path.startsWith('/live') ? 'live'
       : path.startsWith('/competition') ? 'competitions'
-        : path.startsWith('/actus') ? 'news'
-          : path.startsWith('/favoris') ? 'favorites'
-            : path.startsWith('/collecte') ? 'collector'
-              : '';
+        : path.startsWith('/cotes') ? 'odds'
+          : path.startsWith('/actus') ? 'news'
+            : path.startsWith('/favoris') || path.startsWith('/alertes') ? 'favorites'
+              : path.startsWith('/collecte') ? 'collector'
+                : '';
   document.querySelectorAll('[data-nav]').forEach((el) => {
     el.classList.toggle('is-active', el.dataset.nav === key);
   });

@@ -61,8 +61,11 @@ test.describe('page Collecte', () => {
   test('la page est accessible depuis la navigation', async ({ page, isMobile }) => {
     await page.goto('/#/');
     await page.waitForSelector('.league');
+    // Sur mobile, la collecte est un outil interne : elle n'occupe pas une des
+    // cinq places de la barre d'onglets, mais reste joignable en un geste.
+    if (isMobile) await page.locator('#more-toggle').click();
     const lien = isMobile
-      ? page.locator('.tab-bar a[data-nav="collector"]')
+      ? page.locator('.app-more__menu a[data-nav="collector"]')
       : page.locator('.app-nav a[data-nav="collector"]');
     await lien.click();
     await expect(page).toHaveURL(/#\/collecte/);

@@ -134,6 +134,12 @@ export async function syncFollowedFixtures() {
   const body = JSON.stringify({
     subscription: subscription.toJSON(),
     fixtures: store.favoriteFixtures(),
+    teams: store.favoriteTeams(),
+    // Les rencontres a venir des equipes suivies sont calculees ici, a partir
+    // de pages deja chargees. Les faire decouvrir par le serveur couterait un
+    // appel par equipe et par cycle, pour une information que le client a
+    // souvent deja sous la main.
+    teamFixtures: [...teamFixtures],
   });
   const response = await fetch('/api/push/subscribe', {
     method: 'POST',
@@ -141,4 +147,50 @@ export async function syncFollowedFixtures() {
     body,
   }).catch(() => null);
   return Boolean(response?.ok);
+}
+
+/**
+ * Rencontres a venir des equipes suivies, alimentees par les vues qui les
+ * chargent de toute facon (fiche d'equipe, fil par equipe).
+ */
+const teamFixtures = new Set();
+
+export function rememberTeamFixtures(ids) {
+  let changed = false;
+  for (const id of ids) {
+    const numeric = Number(id);
+    if (Number.isInteger(numeric) && numeric > 0 && !teamFixtures.has(numeric)) {
+      teamFixtures.add(numeric);
+      changed = true;
+    }
+  }
+  if (changed) syncFollowedFixtures().catch(() => {});
+}
+
+/** Etat serveur de cet appareil : rencontres suivies et reglages par type. */
+export async function readPrefs() {
+  const registration = await navigator.serviceWorker.getRegistration?.();
+  const subscription = registration ? await registration.pushManager.getSubscription() : null;
+  if (!subscription) return null;
+  const response = await fetch(`/api/push/state?endpoint=${encodeURIComponent(subscription.endpoint)}`)
+    .catch(() => null);
+  if (!response?.ok) return null;
+  return response.json();
+}
+
+/** Enregistre les reglages par type. */
+export async function writePrefs(prefs) {
+  const registration = await navigator.serviceWorker.getRegistration?.();
+  const subscription = registration ? await registration.pushManager.getSubscription() : null;
+  if (!subscription) return { ok: false, reason: "Activez d'abord les notifications sur cet appareil." };
+  const response = await fetch('/api/push/prefs', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint: subscription.endpoint, prefs }),
+  }).catch(() => null);
+  if (!response?.ok) {
+    const payload = await response?.json().catch(() => ({}));
+    return { ok: false, reason: payload?.error || 'Enregistrement impossible.' };
+  }
+  return { ok: true };
 }

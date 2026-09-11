@@ -5,6 +5,7 @@
 
 const KEY_FIXTURES = 'batscores.favorites.fixtures';
 const KEY_LEAGUES = 'batscores.favorites.leagues';
+const KEY_TEAMS = 'batscores.favorites.teams';
 const KEY_COLLAPSED = 'batscores.collapsed';
 
 function read(key) {
@@ -56,6 +57,22 @@ export const store = {
     if (index === -1) list.push(numeric);
     else list.splice(index, 1);
     write(KEY_LEAGUES, list);
+    notify();
+    return index === -1;
+  },
+
+  // Suivre un club, et pas seulement une rencontre : c'est ce qui alimente le
+  // fil par equipe, la colonne "equipes suivies" des alertes et le rail des
+  // actualites.
+  favoriteTeams: () => read(KEY_TEAMS),
+  isFavoriteTeam: (id) => read(KEY_TEAMS).includes(Number(id)),
+  toggleTeam(id) {
+    const numeric = Number(id);
+    const list = read(KEY_TEAMS);
+    const index = list.indexOf(numeric);
+    if (index === -1) list.push(numeric);
+    else list.splice(index, 1);
+    write(KEY_TEAMS, list);
     notify();
     return index === -1;
   },

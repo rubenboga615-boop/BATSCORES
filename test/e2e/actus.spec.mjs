@@ -35,10 +35,13 @@ test.describe('actualités', () => {
     await expect(lien).toHaveAttribute('href', /^https:\/\//);
   });
 
-  test('la navigation mène à la page Actus', async ({ page }) => {
+  test('la navigation mène à la page Actus', async ({ page, isMobile }) => {
     await page.goto('/#/');
-    // Deux entrées portent ce repère : la barre du haut sur grand écran, la
-    // barre d'onglets sur mobile. Seule la visible est cliquable.
+    await page.waitForSelector('.league');
+    // Sur mobile la barre d'onglets ne porte que les cinq vues principales de
+    // la maquette : Actus vit dans le menu de débordement. Ce qui compte reste
+    // le même — la page est joignable sans connaître son adresse.
+    if (isMobile) await page.locator('#more-toggle').click();
     await page.locator('a[data-nav="news"]:visible').first().click();
     await expect(page).toHaveURL(/#\/actus/);
     await page.waitForSelector('.news');

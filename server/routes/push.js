@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import express from 'express';
 import { config, pushEnabled } from '../config.js';
-import { MAX_FIXTURES } from '../pushStore.js';
+import { MAX_FIXTURES, MAX_TEAMS, DEFAULT_PREFS, NOTIFICATION_KINDS } from '../pushStore.js';
 
 /**
  * Abonnement aux notifications.
@@ -58,11 +58,16 @@ export function createPushRouter(store) {
     if (error) return res.status(400).json({ error });
 
     const fixtures = Array.isArray(req.body?.fixtures) ? req.body.fixtures : [];
-    const record = store.subscribe(subscription, fixtures);
+    const teams = Array.isArray(req.body?.teams) ? req.body.teams : [];
+    const teamFixtures = Array.isArray(req.body?.teamFixtures) ? req.body.teamFixtures : [];
+    const record = store.subscribe(subscription, fixtures, teams, req.body?.prefs || null, teamFixtures);
     return res.status(201).json({
       ok: true,
       fixtures: record.fixtures,
+      teams: record.teams,
+      prefs: record.prefs,
       max: MAX_FIXTURES,
+      maxTeams: MAX_TEAMS,
     });
   });
 
@@ -86,8 +91,29 @@ export function createPushRouter(store) {
     return res.json({
       known: Boolean(record),
       fixtures: record?.fixtures || [],
+      teams: record?.teams || [],
+      prefs: record?.prefs || { ...DEFAULT_PREFS },
+      kinds: NOTIFICATION_KINDS,
       max: MAX_FIXTURES,
+      maxTeams: MAX_TEAMS,
     });
+  });
+
+  /**
+   * PUT /api/push/prefs - reglage par type d'evenement.
+   *
+   * Le filtrage vit sur le serveur et non dans le navigateur : c'est le
+   * serveur qui decide d'envoyer, et une preference gardee cote client
+   * n'empecherait aucune notification de partir.
+   */
+  router.put('/prefs', (req, res) => {
+    const endpoint = req.body?.endpoint;
+    if (typeof endpoint !== 'string' || !endpoint) {
+      return res.status(400).json({ error: 'Point de terminaison manquant.' });
+    }
+    const record = store.setPrefs(endpoint, req.body?.prefs);
+    if (!record) return res.status(404).json({ error: 'Appareil inconnu : abonnez-vous d\'abord.' });
+    return res.json({ ok: true, prefs: record.prefs });
   });
 
   return router;
