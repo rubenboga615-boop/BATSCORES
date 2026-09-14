@@ -67,7 +67,7 @@ export function leagueBlock(group) {
         <span class="league__country">${esc(countryName(group.league.country))}</span>
         <span class="league__name">${esc(group.league.name || '')}</span>
         <span class="league__count">
-          ${liveCount ? `<span style="color:var(--live);font-weight:700">${liveCount} en direct</span> · ` : ''}${group.matches.length} match${group.matches.length > 1 ? 's' : ''}
+          ${liveCount ? `<span style="color:var(--live);font-weight:700">${liveCount} en direct</span> · ` : ''}${group.matches.length}<span class="league__count-unit"> match${group.matches.length > 1 ? 's' : ''}</span>
         </span>
         <a class="league__link" data-standalone-link
            href="#/competition/${group.league.id}?season=${group.league.season || ''}">Classement</a>

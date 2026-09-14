@@ -562,9 +562,11 @@ button { font-family: inherit; }
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .league__link {
+  flex: 0 0 auto;
   font-size: 12px;
   font-weight: 700;
   color: var(--accent);
@@ -1927,6 +1929,7 @@ table.standings, .table-wrap table {
   .league__head { gap: 8px; }
   .league__country { flex: 0 0 auto; font-size: 9px; letter-spacing: 0.12em; }
   .league__count { font-size: 11px; }
+  .league__count-unit { display: none; }
   .match { grid-template-columns: 52px minmax(0, 1fr) 34px 26px; gap: 10px; }
   .match__time { font-size: 11px; }
   .match__team { font-size: 13px; }
