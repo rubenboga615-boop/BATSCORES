@@ -101,14 +101,15 @@ test.describe('fiche joueur', () => {
 test.describe('fiche équipe enrichie', () => {
   test('affiche buts par quart d\'heure, records et formations', async ({ page }) => {
     await page.goto('/#/equipe/85');
+    await page.click('[data-tab="stats"]');
     await page.waitForSelector('.minute-bars');
 
     // Un seul graphique désormais : marqués et encaissés partagent l'axe.
     await expect(page.locator('.minute-bars')).toHaveCount(1);
-    await expect(page.locator('.card').filter({ hasText: 'Records de la saison' }))
+    await expect(page.locator('section').filter({ hasText: 'Records de la saison' }))
       .toContainText('Plus longue serie de victoires');
-    await expect(page.locator('.card').filter({ hasText: 'Formations utilisees' })
+    await expect(page.locator('section').filter({ hasText: 'Formations utilisees' })
       .locator('.chip').first()).toContainText('4-3-3');
-    await expect(page.locator('.card').filter({ hasText: 'penaltys' })).toContainText('88.89%');
+    await expect(page.locator('section').filter({ hasText: 'Bilan aux penaltys' })).toContainText('88.89%');
   });
 });

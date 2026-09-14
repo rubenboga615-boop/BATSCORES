@@ -12,8 +12,21 @@ const listState = { query: '' };
 
 export async function renderCompetitions(root) {
   root.innerHTML = `
-    <div class="filters"><input id="league-filter" class="filter" style="flex:1;min-width:200px;cursor:text"
-      placeholder="Filtrer les competitions..." value="${esc(listState.query)}" /></div>
+    <div class="page-head">
+      <div>
+        <div class="page-head__kicker" id="league-count">Catalogue</div>
+        <h1 class="page-head__title">Competitions</h1>
+      </div>
+      <div class="page-head__aside">
+        <label class="search" style="max-width:300px;height:40px">
+          <svg class="search__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path d="M10.5 3a7.5 7.5 0 105.06 13.06l4.19 4.19 1.41-1.41-4.19-4.19A7.5 7.5 0 0010.5 3zm0 2a5.5 5.5 0 110 11 5.5 5.5 0 010-11z" fill="currentColor"/>
+          </svg>
+          <input id="league-filter" placeholder="Filtrer" aria-label="Filtrer les competitions"
+                 value="${esc(listState.query)}" />
+        </label>
+      </div>
+    </div>
     <div id="league-list">${skeletonList(8)}</div>`;
 
   if (!catalogue) {
@@ -57,15 +70,28 @@ function paintCatalogue(root) {
       </button>
     </div>`;
 
-  const section = (title, items) => (items.length
-    ? `<div class="section-title">${esc(title)}</div><div class="card">${items.map(row).join('')}</div>`
-    : '');
+  // Trois colonnes d'egale largeur, separees par un filet : la maquette range
+  // le catalogue plutot que de l'empiler sur une seule colonne.
+  const column = (title, items) => `
+    <div>
+      <div class="section-title">${esc(title)}</div>
+      ${items.length
+    ? items.map(row).join('')
+    : '<div style="font-size:12px;color:var(--text-faint);padding:13px 0">Aucune.</div>'}
+    </div>`;
 
-  container.innerHTML = [
-    section('Mes competitions', favorites),
-    section('Principales competitions', featured),
-    section('Toutes les competitions', rest),
-  ].join('');
+  container.innerHTML = `
+    <div class="cols3">
+      ${column('Mes competitions', favorites)}
+      ${column('Principales competitions', featured)}
+      ${column('Toutes les competitions', rest)}
+    </div>`;
+
+  const count = root.querySelector('#league-count');
+  if (count) {
+    const countries = new Set(filtered.map((l) => l.country).filter(Boolean)).size;
+    count.textContent = `${filtered.length} competition${filtered.length > 1 ? 's' : ''} · ${countries} pays`;
+  }
 }
 
 /* ---------------------------- Fiche competition --------------------------- */
@@ -130,21 +156,21 @@ function standingsTable(payload) {
   return switcher + payload.tables.map((rawTable) => {
     const table = { ...rawTable, rows: sideRows(rawTable.rows, side) };
     return `
-    <div class="card">
-      <div class="card__title">${esc(table.group || '')}</div>
+    <section style="margin-bottom:32px">
+      ${table.group ? `<div class="section-title">${esc(table.group)}</div>` : ''}
       <div class="table-wrap">
         <table class="standings">
           <thead>
             <tr>
-              <th>#</th><th>Equipe</th><th>J</th><th>G</th><th>N</th><th>P</th>
+              <th class="left">#</th><th class="left">Equipe</th><th>J</th><th>G</th><th>N</th><th>P</th>
               <th>BP</th><th>BC</th><th>Diff</th><th>Pts</th><th>Forme</th>
             </tr>
           </thead>
           <tbody>
             ${table.rows.map((r) => `
               <tr class="${zoneClass(r.description)}" data-team="${r.team.id}">
-                <td class="rank">${r.rank}</td>
-                <td class="team">${logo(r.team.logo, r.team.name)}<span>${esc(r.team.name)}</span></td>
+                <td class="rank left">${r.rank}</td>
+                <td class="team left">${logo(r.team.logo, r.team.name)}<span>${esc(r.team.name)}</span></td>
                 <td>${r.all?.played ?? '-'}</td>
                 <td>${r.all?.win ?? '-'}</td>
                 <td>${r.all?.draw ?? '-'}</td>
@@ -160,12 +186,12 @@ function standingsTable(payload) {
       </div>
       ${side === 'all' ? `
       <div class="legend">
-        <span><i style="background:#3b82f6"></i>Ligue des champions</span>
-        <span><i style="background:#f59e0b"></i>Europa League</span>
-        <span><i style="background:#14b8a6"></i>Conference League</span>
-        <span><i style="background:#ff4d4f"></i>Relegation</span>
+        <span><i style="background:var(--accent)"></i>Ligue des champions</span>
+        <span><i style="background:var(--accent-2)"></i>Europa League</span>
+        <span><i style="background:var(--accent-3)"></i>Conference League</span>
+        <span><i style="background:var(--live)"></i>Relegation</span>
       </div>` : ''}
-    </div>`;
+    </section>`;
   }).join('');
 }
 
@@ -191,8 +217,8 @@ function rankingsTable(payload) {
   }
 
   return switcher + `
-    <div class="card">
-      <div class="card__title">${esc(label)}</div>
+    <section>
+      <div class="section-title">${esc(label)}</div>
       ${payload.rows.map((r, index) => `
         <div class="list-row" data-player-link="${r.player.id}">
           <span style="width:22px;color:var(--text-faint);font-variant-numeric:tabular-nums">${index + 1}</span>
@@ -205,7 +231,7 @@ function rankingsTable(payload) {
           </div>
           <span class="list-row__value">${value(r)}</span>
         </div>`).join('')}
-    </div>`;
+    </section>`;
 }
 
 function fixturesList(payload) {
@@ -254,9 +280,6 @@ export async function renderCompetitionDetail(root, { params, query }) {
   detail.season = query.season || null;
 
   const known = catalogue?.find((l) => l.id === id);
-  const title = known
-    ? `${countryName(known.country)} · ${known.name}`
-    : `Competition ${id}`;
 
   const tabs = [
     { id: 'standings', label: 'Classement' },
@@ -266,10 +289,13 @@ export async function renderCompetitionDetail(root, { params, query }) {
 
   root.innerHTML = `
     ${backLink('#/competitions', 'Competitions')}
-    <div class="card" style="padding:14px;display:flex;align-items:center;gap:10px">
-      ${known ? logo(known.logo, known.name) : ''}
-      <strong>${esc(title)}</strong>
-      ${detail.season ? `<span style="margin-left:auto;color:var(--text-faint);font-size:12px">Saison ${esc(detail.season)}</span>` : ''}
+    <div class="page-head">
+      ${known ? logo(known.flag || known.logo, known.country, 'league__flag') : ''}
+      <div>
+        <div class="page-head__kicker">${esc(known ? countryName(known.country) : 'Competition')}</div>
+        <h1 class="page-head__title">${esc(known ? known.name : `Competition ${id}`)}</h1>
+      </div>
+      ${detail.season ? `<div class="page-head__aside" style="font-size:12px;color:var(--text-faint);font-variant-numeric:tabular-nums">Saison ${esc(detail.season)}</div>` : ''}
     </div>
     ${tabsBar(tabs, detail.tab)}
     <div id="competition-panel"></div>`;

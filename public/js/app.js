@@ -9,11 +9,11 @@ import { debounce, isoDay } from './utils.js';
 import { emptyState } from './components.js';
 
 import { renderMatches, bindMatchesEvents, refreshMatches, matchesState } from './views/matches.js';
-import { renderLive, refreshLive } from './views/live.js';
+import { renderLive, refreshLive, bindLiveEvents } from './views/live.js';
 import { renderMatchDetail, bindMatchDetailEvents, refreshMatchDetail } from './views/matchDetail.js';
 import { renderCompetitions, renderCompetitionDetail, bindCompetitionEvents } from './views/competitions.js';
 import { renderFavorites } from './views/favorites.js';
-import { renderTeam } from './views/team.js';
+import { renderTeam, bindTeamEvents } from './views/team.js';
 import { renderPlayer, bindPlayerEvents } from './views/player.js';
 import { renderSearch } from './views/search.js';
 import { renderCompare } from './views/compare.js';
@@ -54,6 +54,8 @@ bindCompetitionEvents(root);
 bindCollectorEvents(root);
 bindPlayerEvents(root);
 bindAlertsEvents(root);
+bindLiveEvents(root);
+bindTeamEvents(root);
 
 // Ouverture d'un match ou d'une equipe depuis n'importe quelle liste.
 root.addEventListener('click', (event) => {

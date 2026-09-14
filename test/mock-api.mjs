@@ -575,6 +575,31 @@ const ENDPOINTS = {
     team: { id: 85, name: 'Paris Saint Germain' },
     players: [{ id: 1, name: 'G. Donnarumma', number: 99, position: 'Goalkeeper' }],
   }]),
+
+  // Profils de joueurs : la recherche par nom. Le vrai fournisseur exige
+  // quatre caracteres, et ne renvoie ni club ni poste sur cet endpoint.
+  '/players/profiles': (params) => {
+    const q = (params.get('search') || '').toLowerCase();
+    const tous = [
+      { id: 1, name: 'Ousmane Dembele', nationality: 'France', age: 28, photo: 'https://media.example/dembele.png' },
+      { id: 2, name: 'Amine Harit', nationality: 'Maroc', age: 29, photo: 'https://media.example/harit.png' },
+    ];
+    return tous.filter((p) => p.name.toLowerCase().includes(q)).map((player) => ({ player }));
+  },
+
+  // Indisponibles : blesses et suspendus d'une equipe.
+  '/injuries': () => ([
+    {
+      player: { id: 7, name: 'K. Kvaratskhelia', type: 'Missing Fixture', reason: 'Cuisse' },
+      fixture: { id: 1001, date: '2026-09-10T19:00:00+00:00' },
+      team: { id: 85, name: 'Paris Saint Germain' },
+    },
+    {
+      player: { id: 8, name: 'Vitinha', type: 'Missing Fixture', reason: 'Suspendu' },
+      fixture: { id: 1001, date: '2026-09-10T19:00:00+00:00' },
+      team: { id: 85, name: 'Paris Saint Germain' },
+    },
+  ]),
 };
 
 /**

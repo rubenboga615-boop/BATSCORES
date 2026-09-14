@@ -251,6 +251,35 @@ teamsRouter.get('/:id(\\d+)/statistics', async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/teams/:id/injuries?league=&season=
+ * Blesses et suspendus, pour le rail "indisponibles" du fil d'equipe.
+ * Mis en cache une heure : une infirmerie ne change pas d'un quart d'heure
+ * a l'autre, et cette page est consultee en boucle un jour de match.
+ */
+teamsRouter.get('/:id(\\d+)/injuries', async (req, res, next) => {
+  try {
+    const team = Number(req.params.id);
+    const season = Number(req.query.season) || currentSeason();
+    const params = { team, season };
+    if (Number.isInteger(Number(req.query.league))) params.league = Number(req.query.league);
+
+    const { data } = await apiGet('/injuries', params, HOUR);
+    res.set('Cache-Control', 'public, max-age=1800');
+    res.json({
+      players: data.map((entry) => ({
+        id: entry.player?.id ?? null,
+        name: entry.player?.name || '',
+        reason: entry.player?.reason || '',
+        type: entry.player?.type || '',
+        fixtureDate: entry.fixture?.date || null,
+      })).filter((p) => p.name),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 teamsRouter.get('/:id(\\d+)/squad', async (req, res, next) => {
   try {
     const id = Number(req.params.id);

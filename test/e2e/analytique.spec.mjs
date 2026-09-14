@@ -91,8 +91,11 @@ test.describe('comparateur', () => {
 test.describe('profil par quart d\'heure', () => {
   test('la fiche équipe superpose buts marqués et encaissés sur un seul axe', async ({ page }) => {
     await page.goto('/#/equipe/85');
+    // Le bilan de saison vit derrière son onglet depuis la refonte : la fiche
+    // s'ouvre sur le fil du club.
+    await page.click('[data-tab="stats"]');
     await page.waitForSelector('.minute-bars--split');
-    const bloc = page.locator('.card').filter({ hasText: 'Buts par tranche de 15 minutes' });
+    const bloc = page.locator('section').filter({ hasText: 'Buts par tranche de 15 minutes' });
     await expect(bloc.locator('.minute-bar')).toHaveCount(6);
     await expect(bloc.locator('.minute-bar__col.against').first()).toBeVisible();
     await expect(page.locator('.versus__legend').first()).toContainText('encaisses');

@@ -647,6 +647,50 @@ button { font-family: inherit; }
   animation: pulse 1.6s ease-in-out infinite;
 }
 
+/* Ligne de duel : les deux equipes de part et d'autre du score, employee la
+   ou toutes les rencontres sont en cours. */
+.match--duel {
+  grid-template-columns: 70px minmax(0, 1fr) 64px minmax(0, 1fr) 120px 34px;
+  gap: 18px;
+  padding: 14px 8px 14px 0;
+}
+.match__side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.match__side--home { justify-content: flex-end; text-align: right; }
+.match__side img, .match__side .logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  background: var(--bg-block);
+  flex: 0 0 auto;
+}
+.match__side-name {
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match__duel-score {
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--live);
+  white-space: nowrap;
+}
+.match__last {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: right;
+  line-height: 1.4;
+  min-width: 0;
+}
+
 /* --------------------------- Fiche de match ------------------------------ */
 
 .mh {
@@ -956,12 +1000,12 @@ table.standings, .table-wrap table {
   object-fit: contain;
   background: var(--bg-block);
 }
-.table-wrap td.pts { font-weight: 800; color: var(--text); }
+.table-wrap td.points { font-weight: 800; color: var(--text); }
 
 /* La zone europeenne ou la relegation se lit sur un filet a gauche du rang. */
 .zone-ucl { box-shadow: inset 4px 0 0 0 var(--accent); }
 .zone-uel { box-shadow: inset 4px 0 0 0 var(--accent-2); }
-.zone-uecl { box-shadow: inset 4px 0 0 0 var(--accent-3); }
+.zone-conf { box-shadow: inset 4px 0 0 0 var(--accent-3); }
 .zone-rel { box-shadow: inset 4px 0 0 0 var(--live); }
 
 .legend {
@@ -1870,6 +1914,10 @@ table.standings, .table-wrap table {
   .match__team { font-size: 13px; }
   .match__team img, .match__team .logo { width: 16px; height: 16px; }
   .match__score { font-size: 14px; }
+  .match--duel { grid-template-columns: 54px minmax(0, 1fr) 56px minmax(0, 1fr) 26px; gap: 8px; }
+  .match--duel .match__last { display: none; }
+  .match__side-name { font-size: 12px; }
+  .match__duel-score { font-size: 15px; }
   .page-head { flex-wrap: wrap; gap: 10px; }
   .page-head__title { font-size: 22px; }
   .page-head__aside { margin-left: 0; width: 100%; }

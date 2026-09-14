@@ -26,16 +26,23 @@ miscRouter.get('/health', (req, res) => {
   });
 });
 
-/** GET /api/search?q= - recherche equipes et competitions. */
+/** GET /api/search?q= - recherche equipes, joueurs et competitions. */
 miscRouter.get('/search', async (req, res, next) => {
   try {
     const q = (req.query.q || '').trim();
     if (q.length < 3) {
-      return res.json({ query: q, teams: [], leagues: [], hint: 'Saisissez au moins 3 caracteres.' });
+      return res.json({ query: q, teams: [], players: [], leagues: [], hint: 'Saisissez au moins 3 caracteres.' });
     }
-    const [teams, leagues] = await Promise.all([
+    // Trois recherches en parallele, chacune mise en cache six heures : un nom
+    // d'equipe ou de joueur ne change pas d'un quart d'heure a l'autre.
+    // Le fournisseur exige quatre caracteres sur les profils de joueurs ; en
+    // demander trois renvoie une erreur plutot qu'une liste vide.
+    const [teams, leagues, players] = await Promise.all([
       apiGet('/teams', { search: q }, 6 * 3600_000).then((r) => r.data).catch(() => []),
       apiGet('/leagues', { search: q }, 6 * 3600_000).then((r) => r.data).catch(() => []),
+      q.length >= 4
+        ? apiGet('/players/profiles', { search: q }, 6 * 3600_000).then((r) => r.data).catch(() => [])
+        : Promise.resolve([]),
     ]);
     res.json({
       query: q,
@@ -45,6 +52,15 @@ miscRouter.get('/search', async (req, res, next) => {
         logo: t.team?.logo,
         country: t.team?.country,
       })),
+      players: players.slice(0, 20).map((p) => ({
+        id: p.player?.id,
+        name: p.player?.name,
+        photo: p.player?.photo,
+        // Le profil ne porte ni club ni poste : la nationalite et l'age sont
+        // ce que cette reponse sait vraiment dire.
+        sub: [p.player?.nationality, p.player?.age ? `${p.player.age} ans` : null]
+          .filter(Boolean).join(' · '),
+      })).filter((p) => p.id),
       leagues: leagues.slice(0, 20).map((l) => {
         const season = l.seasons?.find((s) => s.current) || l.seasons?.at(-1);
         return {
