@@ -927,6 +927,8 @@ button { font-family: inherit; }
 .stat__bar i { display: block; }
 .stat__bar i:first-child { background: var(--accent); }
 .stat__bar i:last-child { background: var(--ink); }
+.stat__bar i.home { background: var(--accent); }
+.stat__bar i.away { background: var(--ink); }
 
 /* --------------------------------- Momentum ------------------------------ */
 
@@ -1288,6 +1290,7 @@ table.standings, .table-wrap table {
 .versus__bar { display: flex; height: 5px; background: var(--bg-block); }
 .versus__bar i { display: block; }
 .versus__bar i.a { background: var(--accent); }
+.versus__bar.is-neutral i { background: var(--border); }
 .versus__bar i.b { background: var(--ink); }
 .versus__bar i.neutral { background: var(--border); }
 .versus__legend, .versus__scale {

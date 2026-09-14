@@ -6,6 +6,7 @@ import {
 } from '../utils.js';
 import { backLink, tabsBar, emptyState, errorState, skeletonList, matchRow } from '../components.js';
 import { store } from '../store.js';
+import { pitchLivePanel } from './pitchLive.js';
 import { countryName } from '../i18n.js';
 import { momentumSeries, momentumChart, dominanceShare } from '../momentum.js';
 
@@ -36,6 +37,12 @@ function header(fixture) {
 
   const starred = store.isFavoriteFixture(fixture.id);
 
+  // Le score de la maquette separe les deux chiffres par un tiret gris, pour
+  // que l'oeil accroche les nombres et non le signe.
+  const bigScore = played
+    ? `${fixture.goals.home ?? 0}<span>–</span>${fixture.goals.away ?? 0}`
+    : esc(score);
+
   return `
     <div class="mh">
       <div class="mh__league">
@@ -43,32 +50,38 @@ function header(fixture) {
         <a href="#/competition/${fixture.league.id}?season=${fixture.league.season || ''}">
           ${esc(countryName(fixture.league.country))} · ${esc(fixture.league.name || '')}
         </a>
-        ${fixture.league.round ? `<span style="color:var(--text-faint)">· ${esc(fixture.league.round)}</span>` : ''}
+        ${fixture.league.round ? `<span>· ${esc(fixture.league.round)}</span>` : ''}
+        ${phase === 'live' ? '<span class="mh__live"><span class="dot-live"></span>En direct</span>' : ''}
       </div>
       <div class="mh__main">
-        <div class="mh__team">
+        <div class="mh__team mh__team--home">
+          <div>
+            <div class="mh__team-name"><a href="#/equipe/${fixture.home.id}">${esc(fixture.home.name)}</a></div>
+          </div>
           ${logo(fixture.home.logo, fixture.home.name)}
-          <a href="#/equipe/${fixture.home.id}">${esc(fixture.home.name)}</a>
         </div>
         <div class="mh__center">
-          <div class="mh__score ${phase === 'live' ? 'is-live' : ''}">${esc(score)}</div>
+          <div class="mh__score ${phase === 'live' ? 'is-live' : ''}">${bigScore}</div>
           <div class="mh__status ${phase === 'live' ? 'is-live' : ''}">${esc(statusText)}</div>
           ${penaltyLine}
           ${halftimeLine}
         </div>
         <div class="mh__team">
           ${logo(fixture.away.logo, fixture.away.name)}
-          <a href="#/equipe/${fixture.away.id}">${esc(fixture.away.name)}</a>
+          <div>
+            <div class="mh__team-name"><a href="#/equipe/${fixture.away.id}">${esc(fixture.away.name)}</a></div>
+          </div>
         </div>
       </div>
       <div class="mh__meta">
         ${fixture.venue ? `${esc(fixture.venue.name)}${fixture.venue.city ? `, ${esc(fixture.venue.city)}` : ''}` : ''}
         ${fixture.referee ? ` · Arbitre : ${esc(fixture.referee)}` : ''}
-        <div style="margin-top:8px">
-          <button class="filter ${starred ? 'is-active' : ''}" data-star="${fixture.id}">
+        <div class="mh__actions">
+          <button class="${starred ? 'is-on' : ''}" data-star="${fixture.id}">
             ${starred ? '★ Suivi' : '☆ Suivre ce match'}
           </button>
-          <a class="filter" href="#/comparer?a=${fixture.home.id}&b=${fixture.away.id}&league=${fixture.league.id}&season=${fixture.league.season || ''}">
+          <a class="is-primary" style="display:inline-flex;align-items:center;padding:8px 14px;font-size:12px;font-weight:700;background:var(--accent);color:#fff"
+             href="#/comparer?a=${fixture.home.id}&b=${fixture.away.id}&league=${fixture.league.id}&season=${fixture.league.season || ''}">
             ⇄ Comparer les deux equipes
           </a>
         </div>
@@ -139,17 +152,42 @@ function summaryPanel({ fixture, events }) {
         </div>
       </div>`;
   }).join('');
-  return `${momentumBlock(fixture, events)}<div class="card"><div class="card__title">Faits de match</div>${rows}</div>`;
+  // La maquette met les faits a gauche et l'analyse a droite, separes par un
+  // filet plein hauteur. Sur telephone les deux colonnes s'empilent.
+  return `
+    <div class="split">
+      <div class="split__col" style="padding-top:0">
+        <div class="section-title">Faits de match</div>
+        ${rows}
+      </div>
+      <div class="split__rule"></div>
+      <div class="split__col" style="padding-top:0">
+        ${momentumBlock(fixture, events)}
+        <div class="section-title" style="margin-top:20px">Statistiques</div>
+        <div id="summary-stats">${statisticsSummary()}</div>
+      </div>
+    </div>`;
 }
 
-function statisticsPanel({ statistics }) {
-  if (statistics.length < 2) {
-    return emptyState('Statistiques indisponibles', 'Elles sont publiees peu apres le coup d\'envoi.', '📊');
+/**
+ * Les statistiques dans la colonne de droite du resume.
+ * Elles sont deja chargees pour l'onglet dedie : les reafficher ici ne coute
+ * aucun appel, et evite un aller-retour pour lire une possession.
+ */
+function statisticsSummary() {
+  const stats = state.data?.statistics;
+  if (!stats || stats.length < 2) {
+    return '<div style="font-size:12px;color:var(--text-faint);padding:11px 0">Publiees peu apres le coup d\'envoi.</div>';
   }
+  return statRows(stats);
+}
+
+/** Les lignes de comparaison, partagees entre le resume et l'onglet dedie. */
+function statRows(statistics) {
   const [home, away] = statistics;
   const awayByType = new Map((away.statistics || []).map((s) => [s.type, s.value]));
 
-  const rows = (home.statistics || []).map((stat) => {
+  return (home.statistics || []).map((stat) => {
     const homeValue = stat.value ?? 0;
     const awayValue = awayByType.get(stat.type) ?? 0;
     const [hp, ap] = statRatio(homeValue, awayValue);
@@ -166,14 +204,20 @@ function statisticsPanel({ statistics }) {
         </div>
       </div>`;
   }).join('');
+}
 
+function statisticsPanel({ statistics }) {
+  if (statistics.length < 2) {
+    return emptyState('Statistiques indisponibles', 'Elles sont publiees peu apres le coup d\'envoi.', '📊');
+  }
+  const [home, away] = statistics;
   return `
-    <div class="card">
-      <div class="card__title">
+    <section>
+      <div class="section-title">
         ${esc(home.team?.name || '')} &nbsp;·&nbsp; ${esc(away.team?.name || '')}
       </div>
-      ${rows}
-    </div>`;
+      ${statRows(statistics)}
+    </section>`;
 }
 
 function lineupColumn(lineup) {
@@ -221,25 +265,85 @@ function h2hPanel({ h2h, fixture }) {
     else if ((m.goals.home > m.goals.away) === homeIsOurHome) homeWins += 1;
     else awayWins += 1;
   }
+  const played = past.filter((m) => m.status.phase === 'finished');
+  const goals = played.reduce((total, m) => total + (m.goals.home ?? 0) + (m.goals.away ?? 0), 0);
+  const average = played.length ? (goals / played.length).toFixed(1).replace('.', ',') : '—';
+
+  const totals = [
+    { value: homeWins, label: `Victoires ${fixture.home.name}`, tone: 'is-accent' },
+    { value: draws, label: 'Nuls' },
+    { value: awayWins, label: `Victoires ${fixture.away.name}` },
+    { value: average, label: 'Buts par match' },
+  ];
+
+  /**
+   * Seuils calcules sur les rencontres deja jouees.
+   *
+   * La maquette montre aussi les corners et les cartons. Ils ne figurent pas
+   * dans la reponse des confrontations : il faudrait lire les statistiques de
+   * chaque rencontre, soit un appel par confrontation. Les seuils affiches
+   * sont donc ceux que le score suffit a etablir, et rien n'est extrapole.
+   */
+  const rules = [
+    ['Plus de 1,5 but', (m) => (m.goals.home ?? 0) + (m.goals.away ?? 0) > 1.5],
+    ['Plus de 2,5 buts', (m) => (m.goals.home ?? 0) + (m.goals.away ?? 0) > 2.5],
+    ['Plus de 3,5 buts', (m) => (m.goals.home ?? 0) + (m.goals.away ?? 0) > 3.5],
+    ['Les deux equipes marquent', (m) => (m.goals.home ?? 0) > 0 && (m.goals.away ?? 0) > 0],
+    ['Un but en premiere periode', (m) => {
+      const ht = m.score?.halftime;
+      if (ht?.home === null || ht?.home === undefined) return null;
+      return (ht.home ?? 0) + (ht.away ?? 0) > 0;
+    }],
+    ['Match nul', (m) => m.goals.home === m.goals.away],
+  ];
+
+  const thresholds = rules.map(([label, test]) => {
+    const applicable = played.map(test).filter((v) => v !== null);
+    if (!applicable.length) return null;
+    const hits = applicable.filter(Boolean).length;
+    return { label, pct: Math.round((hits / applicable.length) * 100), sample: applicable.length };
+  }).filter(Boolean);
+
+  const since = played.length
+    ? new Date(played[played.length - 1].date).getFullYear()
+    : null;
+
   return `
-    <div class="card">
-      <div class="card__title">Bilan des confrontations</div>
-      <div class="stat">
-        <div class="stat__row">
-          <span class="stat__value">${homeWins}</span>
-          <span class="stat__label">${esc(fixture.home.name)} · nuls · ${esc(fixture.away.name)}</span>
-          <span class="stat__value">${awayWins}</span>
-        </div>
-        <div class="stat__bar">
-          <i class="home" style="width:${(homeWins / Math.max(past.length, 1)) * 100}%"></i>
-          <i style="background:var(--text-faint);width:${(draws / Math.max(past.length, 1)) * 100}%"></i>
-          <i class="away" style="width:${(awayWins / Math.max(past.length, 1)) * 100}%"></i>
-        </div>
+    <div class="page-head" style="display:block;border-bottom:2px solid var(--rule-strong)">
+      <div class="page-head__kicker">
+        ${esc(fixture.home.name)} – ${esc(fixture.away.name)} · ${past.length} confrontation${past.length > 1 ? 's' : ''}${since ? ` depuis ${since}` : ''}
       </div>
     </div>
-    <div class="card">
-      <div class="card__title">Dernieres rencontres</div>
-      ${past.map(matchRow).join('')}
+    <div class="totals">
+      ${totals.map((t) => `
+        <div class="totals__cell">
+          <div class="totals__value ${t.tone || ''}">${esc(String(t.value))}</div>
+          <div class="totals__label">${esc(t.label)}</div>
+        </div>`).join('')}
+    </div>
+    <div class="split split--wide-left" style="margin-top:4px">
+      <div class="split__col" style="padding-top:24px">
+        <div class="section-title">Dernieres rencontres</div>
+        ${past.slice(0, 8).map(matchRow).join('')}
+      </div>
+      <div class="split__rule"></div>
+      <div class="split__col" style="padding-top:24px">
+        <div class="section-title">Seuils, sur les rencontres jouees</div>
+        ${thresholds.length ? thresholds.map((t) => `
+          <div class="threshold">
+            <div class="threshold__head">
+              <span class="threshold__label">${esc(t.label)}</span>
+              <span class="threshold__pct">${t.pct} %</span>
+            </div>
+            <div class="threshold__track"><i class="threshold__fill" style="width:${t.pct}%"></i></div>
+          </div>`).join('')
+    : '<div style="font-size:12px;color:var(--text-faint);padding:12px 0">Aucune rencontre terminee dans l\'historique.</div>'}
+        <div class="note note--sm" style="margin-top:20px">
+          Corners et cartons ne figurent pas dans la reponse des confrontations :
+          les etablir demanderait un appel par rencontre. Les seuils ci-dessus
+          sont ceux que le score suffit a trancher.
+        </div>
+      </div>
     </div>`;
 }
 
@@ -660,6 +764,7 @@ function contextPanel({ media }) {
 
 const PANELS = {
   summary: summaryPanel,
+  pitch: pitchLivePanel,
   context: contextPanel,
   players: playersPanel,
   prediction: predictionPanel,
@@ -713,6 +818,7 @@ export async function renderMatchDetail(root, { params }) {
 
   const tabs = [
     { id: 'summary', label: 'Resume' },
+    ...(state.data.fixture.status.phase === 'scheduled' ? [] : [{ id: 'pitch', label: 'Terrain' }]),
     { id: 'prediction', label: 'Pronostic' },
     { id: 'odds', label: 'Cotes' },
     { id: 'players', label: 'Joueurs' },

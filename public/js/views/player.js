@@ -24,25 +24,62 @@ async function get(path) {
 
 /* ------------------------------- En-tete ---------------------------------- */
 
-function header(player) {
-  const bits = [
-    countryName(player.nationality),
-    player.age ? `${player.age} ans` : null,
-    player.height,
-    player.weight,
+function header(player, statistics) {
+  // Le surtitre dit le role : poste, club et numero viennent du bilan de
+  // saison, la fiche d'identite ne les porte pas.
+  const first = statistics?.[0];
+  const kicker = [
+    first?.games?.position,
+    first?.team?.name,
+    first?.games?.number ? `n° ${first.games.number}` : null,
+  ].filter(Boolean).join(' · ');
+
+  const aside = [
+    [countryName(player.nationality), player.age ? `${player.age} ans` : null].filter(Boolean).join(' · '),
+    [player.height, player.weight, player.birth?.place ? `ne a ${player.birth.place}` : null]
+      .filter(Boolean).join(' · '),
   ].filter(Boolean);
 
   return `
-    <div class="mh">
-      <div class="mh__main" style="grid-template-columns:auto 1fr">
-        ${logo(player.photo, player.name)}
-        <div style="text-align:left">
-          <div style="font-size:20px;font-weight:800">${esc(player.name)}</div>
-          <div style="color:var(--text-faint);font-size:13px;margin-top:4px">${esc(bits.join(' · '))}</div>
-          ${player.birth?.date ? `<div style="color:var(--text-faint);font-size:13px">Ne le ${fmtDate(player.birth.date)}${player.birth.place ? ` a ${esc(player.birth.place)}` : ''}</div>` : ''}
-          ${player.injured ? '<div style="color:var(--live);font-size:13px;font-weight:600;margin-top:4px">Actuellement blesse</div>' : ''}
-        </div>
+    <div class="mh" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      ${logo(player.photo, player.name)}
+      <div>
+        <div class="mh__league" style="margin-bottom:3px">${esc(kicker || countryName(player.nationality))}</div>
+        <div style="font-size:26px;font-weight:800;letter-spacing:-.03em">${esc(player.name)}</div>
+        ${player.injured ? '<div style="color:var(--on-ink-live);font-size:13px;font-weight:700;margin-top:6px">Actuellement blesse</div>' : ''}
       </div>
+      ${aside.length ? `
+        <div style="margin-left:auto;text-align:right;font-size:12px;color:var(--on-ink-dim);line-height:1.6">
+          ${aside.map(esc).join('<br>')}
+        </div>` : ''}
+    </div>`;
+}
+
+/** Bandeau de cinq chiffres : ce qu'on retient d'une saison de joueur. */
+function totalsBand(statistics) {
+  if (!statistics?.length) return '';
+  const sum = (pick) => statistics.reduce((total, s) => total + (Number(pick(s)) || 0), 0);
+  const minutes = sum((s) => s.games?.minutes);
+  const ratings = statistics.map((s) => Number(s.games?.rating)).filter((n) => Number.isFinite(n));
+  const average = ratings.length
+    ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2).replace('.', ',')
+    : '—';
+
+  const cells = [
+    { value: sum((s) => s.goals?.total), label: 'Buts', tone: 'is-accent' },
+    { value: sum((s) => s.goals?.assists), label: 'Passes decisives' },
+    { value: sum((s) => s.games?.appearances), label: 'Matchs joues' },
+    { value: minutes ? minutes.toLocaleString('fr-FR') : '—', label: 'Minutes' },
+    { value: average, label: 'Note moyenne' },
+  ];
+
+  return `
+    <div class="totals">
+      ${cells.map((c) => `
+        <div class="totals__cell">
+          <div class="totals__value ${c.tone || ''}">${esc(String(c.value))}</div>
+          <div class="totals__label">${esc(c.label)}</div>
+        </div>`).join('')}
     </div>`;
 }
 
@@ -78,24 +115,32 @@ function seasonPanel({ statistics }) {
     if (s.penalty?.scored) add('Penaltys marques', s.penalty.scored);
     if (s.penalty?.missed) add('Penaltys manques', s.penalty.missed);
 
-    return `
-      <div class="card">
-        <div class="card__title">
-          ${esc(countryName(s.league.country))} · ${esc(s.league.name || '')} — ${esc(s.team.name || '')}
-        </div>
-        <div class="kv">
-          ${rows.map(([k, v]) => `
-            <div class="kv__row"><span class="kv__k">${esc(k)}</span><span class="kv__v">${esc(v)}</span></div>`).join('')}
-        </div>
+    // La maquette separe le jeu (ce qu'il produit) de la precision et des
+    // duels (comment il le produit). Le partage se fait au milieu de la liste.
+    const half = Math.ceil(rows.length / 2);
+    const column = (title, list) => `
+      <div class="split__col" style="padding-top:0">
+        <div class="section-title">${esc(title)}</div>
+        ${list.map(([k, v]) => `
+          <div class="kv__row"><span class="kv__k">${esc(k)}</span><span class="kv__v">${esc(String(v))}</span></div>`).join('')}
       </div>`;
+
+    return `
+      <section style="margin-bottom:32px">
+        <div class="split">
+          ${column(`${countryName(s.league.country)} · ${s.league.name || ''}`, rows.slice(0, half))}
+          <div class="split__rule"></div>
+          ${column(`${s.team.name || ''} · precision et duels`, rows.slice(half))}
+        </div>
+      </section>`;
   }).join('');
 }
 
 function transfersPanel(transfers) {
   if (!transfers?.length) return emptyState('Aucun transfert', 'Aucun mouvement enregistre.', '🔁');
   return `
-    <div class="card">
-      <div class="card__title">Historique des transferts</div>
+    <section>
+      <div class="section-title">Historique des transferts</div>
       ${transfers.map((t) => `
         <div class="list-row" style="cursor:default">
           <div class="list-row__main">
@@ -103,7 +148,7 @@ function transfersPanel(transfers) {
             <div class="list-row__sub">${fmtDate(t.date)}${t.type ? ` · ${esc(t.type)}` : ''}</div>
           </div>
         </div>`).join('')}
-    </div>`;
+    </section>`;
 }
 
 function trophiesPanel(trophies) {
@@ -111,8 +156,8 @@ function trophiesPanel(trophies) {
   const winners = trophies.filter((t) => /winner/i.test(t.place || ''));
   const others = trophies.filter((t) => !/winner/i.test(t.place || ''));
   const block = (title, list) => (list.length ? `
-    <div class="card">
-      <div class="card__title">${esc(title)}</div>
+    <section style="margin-bottom:24px">
+      <div class="section-title">${esc(title)}</div>
       ${list.map((t) => `
         <div class="list-row" style="cursor:default">
           <div class="list-row__main">
@@ -121,15 +166,15 @@ function trophiesPanel(trophies) {
           </div>
           <span class="list-row__value" style="font-size:12px;font-weight:600">${esc(t.place)}</span>
         </div>`).join('')}
-    </div>` : '');
+    </section>` : '');
   return block(`Titres (${winners.length})`, winners) + block('Autres places', others);
 }
 
 function sidelinedPanel(periods) {
   if (!periods?.length) return emptyState('Aucune absence', 'Aucune blessure ni suspension enregistree.', '🩹');
   return `
-    <div class="card">
-      <div class="card__title">Blessures et suspensions</div>
+    <section>
+      <div class="section-title">Blessures et suspensions</div>
       ${periods.map((s) => `
         <div class="list-row" style="cursor:default">
           <div class="list-row__main">
@@ -137,7 +182,7 @@ function sidelinedPanel(periods) {
             <div class="list-row__sub">${fmtDate(s.start)} → ${fmtDate(s.end)}</div>
           </div>
         </div>`).join('')}
-    </div>`;
+    </section>`;
 }
 
 const LOADERS = {
@@ -193,7 +238,8 @@ export async function renderPlayer(root, { params, query }) {
 
   root.innerHTML = `
     ${backLink('#/', 'Retour')}
-    ${header(state.data.player)}
+    ${header(state.data.player, state.data.statistics)}
+    ${totalsBand(state.data.statistics)}
     ${tabsBar(tabs, state.tab)}
     <div id="player-panel"></div>`;
   paintPanel(root);

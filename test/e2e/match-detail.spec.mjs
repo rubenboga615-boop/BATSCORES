@@ -7,7 +7,7 @@ test.describe('fiche de match', () => {
   });
 
   test('affiche le score, le statut et la mi-temps', async ({ page }) => {
-    await expect(page.locator('.mh__score')).toHaveText('3 - 1');
+    await expect(page.locator('.mh__score')).toHaveText('3–1');
     await expect(page.locator('.mh__status').first()).toHaveText('Termine');
     await expect(page.locator('.mh__status').nth(1)).toHaveText('Mi-temps 1 - 0');
   });
@@ -65,6 +65,6 @@ test.describe('fiche de match', () => {
     await page.goto('/#/');
     await page.locator('.match[data-match="1001"] .match__teams').click();
     await expect(page).toHaveURL(/#\/match\/1001/);
-    await expect(page.locator('.mh__score')).toHaveText('3 - 1');
+    await expect(page.locator('.mh__score')).toHaveText('3–1');
   });
 });

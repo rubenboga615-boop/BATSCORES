@@ -78,7 +78,8 @@ test.describe('comparateur', () => {
     // ne compare rien.
     expect(await page.locator('.versus__value.is-leader').count()).toBeGreaterThan(0);
 
-    await expect(page.locator('.card').filter({ hasText: 'Buts marques par tranche' })).toBeVisible();
+    // La refonte n'encadre plus : chaque groupe est une colonne titrée.
+    await expect(page.locator('.section-title').filter({ hasText: 'Buts marques par tranche' }).first()).toBeVisible();
     await expect(page.locator('.minute-bars--versus').first().locator('.minute-bar')).toHaveCount(6);
   });
 

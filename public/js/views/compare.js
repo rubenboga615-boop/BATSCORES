@@ -11,22 +11,22 @@ import { backLink, emptyState, errorState, skeletonList } from '../components.js
 
 function formChips(form) {
   if (!form) return '';
-  return `<span class="form">${String(form).slice(-6).split('').map((c) => `<i class="${c}">${({ W: 'V', D: 'N', L: 'D' })[c] || c}</i>`).join('')}</span>`;
+  return `<span class="form form--sm">${String(form).slice(-5).split('').map((c) => `<i class="${c}">${({ W: 'V', D: 'N', L: 'D' })[c] || c}</i>`).join('')}</span>`;
 }
 
 function metricRow(row) {
   const fmt = (v) => (v === null ? '—' : `${v}${row.unit}`);
   return `
     <div class="versus">
-      <div class="versus__value ${row.leader === 'a' ? 'is-leader' : ''}">${esc(fmt(row.a))}</div>
+      <div class="versus__value home ${row.leader === 'a' ? 'is-lead is-leader' : ''}">${esc(fmt(row.a))}</div>
       <div class="versus__body">
         <div class="versus__label">${esc(row.label)}</div>
         <div class="versus__bar ${row.neutral ? 'is-neutral' : ''}">
-          <i class="a" style="width:${row.shareA}%"></i>
-          <i class="b" style="width:${(100 - row.shareA).toFixed(1)}%"></i>
+          <i class="${row.neutral ? 'neutral' : 'a'}" style="width:${row.shareA}%"></i>
+          <i class="${row.neutral ? 'neutral' : 'b'}" style="width:${(100 - row.shareA).toFixed(1)}%"></i>
         </div>
       </div>
-      <div class="versus__value ${row.leader === 'b' ? 'is-leader' : ''}">${esc(fmt(row.b))}</div>
+      <div class="versus__value ${row.leader === 'b' ? 'is-lead is-leader' : ''}">${esc(fmt(row.b))}</div>
     </div>`;
 }
 
@@ -57,10 +57,10 @@ function minuteComparison(minutes, teams, against = false) {
           <span class="minute-bar__label">${esc(slot.range)}</span>
         </div>`).join('')}
     </div>
-    <div class="versus__legend">
-      <span class="dot a"></span>${esc(teams.a.name)}
-      <span class="dot b"></span>${esc(teams.b.name)}
-      <span class="versus__scale">echelle commune : 0 a ${max} but${max > 1 ? 's' : ''}</span>
+    <div class="versus__legend" style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:10px;height:10px;display:block;background:var(--accent)"></i>${esc(teams.a.name)}</span>
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:10px;height:10px;display:block;background:var(--ink)"></i>${esc(teams.b.name)}</span>
+      <span class="versus__scale" style="padding:0">echelle commune : 0 a ${max} but${max > 1 ? 's' : ''}</span>
     </div>`;
 }
 
@@ -105,39 +105,42 @@ export async function renderCompare(root, { query }) {
 
   const head = (team, cls) => `
     <div class="versus-head__team ${cls}">
-      ${logo(team.logo, team.name, 'team-logo')}
-      <a href="#/equipe/${team.id}">${esc(team.name || '')}</a>
-      ${formChips(team.form)}
+      ${cls === 'home' ? '' : logo(team.logo, team.name)}
+      <div>
+        <a class="name" href="#/equipe/${team.id}">${esc(team.name || '')}</a>
+        <div style="display:flex;gap:4px;margin-top:8px;${cls === 'home' ? 'justify-content:flex-end' : ''}">${formChips(team.form)}</div>
+      </div>
+      ${cls === 'home' ? logo(team.logo, team.name) : ''}
     </div>`;
 
   root.innerHTML = `
     ${backLink('#/', 'Retour')}
-    <div class="card versus-head">
-      ${head(teams.a, 'a')}
+    <div class="versus-head">
+      ${head(teams.a, 'home')}
       <div class="versus-head__vs">contre</div>
-      ${head(teams.b, 'b')}
+      ${head(teams.b, 'away')}
     </div>
-    <div class="card">
-      <div class="stat"><div class="stat__label">${esc(verdict)}
-        Saison ${esc(String(data.league.season))}. Les taux sont ramenes au match
-        pour que deux equipes n'ayant pas joue le meme nombre de rencontres
-        restent comparables.</div></div>
-    </div>
-    <div class="card">
-      <div class="card__title">Indicateurs de la saison</div>
+    <p class="lede" style="padding:22px 0;border-bottom:1px solid var(--rule)">${esc(verdict)}
+      Saison ${esc(String(data.league.season))}. Les taux sont ramenes au match
+      pour que deux equipes n'ayant pas joue le meme nombre de rencontres
+      restent comparables.</p>
+    <section>
       ${rows.map(metricRow).join('')}
-      <div class="stat"><div class="stat__label">
+      <div class="versus__legend">
         La barre penche du cote favorise : sur les buts encaisses ou les
         cartons, c'est la valeur la plus basse qui l'emporte. Les lignes grises
         ne departagent personne.
-      </div></div>
-    </div>
-    <div class="card">
-      <div class="card__title">Buts marques par tranche de 15 minutes</div>
-      ${minuteComparison(minutes, teams)}
-    </div>
-    <div class="card">
-      <div class="card__title">Buts encaisses par tranche de 15 minutes</div>
-      ${minuteComparison(minutes, teams, true)}
+      </div>
+    </section>
+    <div class="split" style="margin-top:32px">
+      <div class="split__col" style="padding-top:0">
+        <div class="section-title">Buts marques par tranche de 15 minutes</div>
+        ${minuteComparison(minutes, teams)}
+      </div>
+      <div class="split__rule"></div>
+      <div class="split__col" style="padding-top:0">
+        <div class="section-title">Buts encaisses par tranche de 15 minutes</div>
+        ${minuteComparison(minutes, teams, true)}
+      </div>
     </div>`;
 }

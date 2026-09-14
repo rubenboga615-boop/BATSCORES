@@ -71,17 +71,16 @@ function quotaCard(data) {
   return `
     <div class="card">
       <div class="card__title">Quota d'aujourd'hui</div>
-      <div class="stat">
-        <div class="stat__row">
-          <span class="stat__value">${fmt(used)}</span>
-          <span class="stat__label">appels consommes</span>
-          <span class="stat__value">${fmt(limit)}</span>
+      <div class="bar-row">
+        <div class="bar-row__head">
+          <span class="bar-row__label">Appels consommes</span>
+          <span class="bar-row__value">${fmt(used)} / ${fmt(limit)}</span>
         </div>
-        <div class="stat__bar">
-          <i style="width:${pct.toFixed(1)}%;background:${critical ? 'var(--live)' : 'var(--accent)'}"></i>
+        <div class="bar-row__track">
+          <i class="bar-row__fill" style="width:${pct.toFixed(1)}%${critical ? ';background:var(--live)' : ''}"></i>
         </div>
-        <div class="stat__label" style="margin-top:6px">
-          ${fmt(Math.max(0, limit - used))} appels restants
+        <div class="bar-row__note">
+          ${fmt(Math.max(0, limit - used))} appels restants · reinitialisation a 00:00 UTC
         </div>
       </div>
     </div>`;
@@ -98,21 +97,14 @@ function progressCard(data) {
       <div class="card__title">
         Avancement ${data.running ? '<span style="color:var(--live)">· collecte en cours</span>' : ''}
       </div>
-      <div class="stat">
-        <div class="stat__row">
-          <span class="stat__value">${fmt(done)} / ${fmt(total)}</span>
-          <span class="stat__label">taches terminees</span>
-          <span class="stat__value">${pct.toFixed(0)} %</span>
+      <div class="bar-row">
+        <div class="bar-row__head">
+          <span class="bar-row__label">Taches terminees</span>
+          <span class="bar-row__value">${fmt(done)} / ${fmt(total)} · ${pct.toFixed(0)} %</span>
         </div>
-        <div class="stat__bar"><i class="home" style="width:${pct.toFixed(1)}%"></i></div>
-      </div>
-      <div class="stat">
-        <div class="stat__row">
-          <span class="stat__label">En attente</span><span class="stat__value">${fmt(pending)}</span>
-        </div>
-        <div class="stat__row">
-          <span class="stat__label">En echec</span>
-          <span class="stat__value" style="${failed ? 'color:var(--live)' : ''}">${fmt(failed)}</span>
+        <div class="bar-row__track"><i class="bar-row__fill" style="width:${pct.toFixed(1)}%"></i></div>
+        <div class="bar-row__note">
+          En attente : ${fmt(pending)} · En echec : <span${failed ? ' style="color:var(--live);font-weight:700"' : ''}>${fmt(failed)}</span>
         </div>
       </div>
     </div>`;
@@ -341,16 +333,62 @@ function paint(root, data, logLines) {
     return;
   }
 
-  body.innerHTML = [
-    data.running ? '<div class="refresh-note"><span class="dot-live"></span> Collecte en cours — actualisation automatique</div>' : '',
-    quotaCard(data),
-    progressCard(data),
-    launchCard(data),
-    logCard(logLines),
-    scopesCard(data),
-    contentCard(data),
-    runsCard(data),
-  ].join('');
+  body.innerHTML = `
+    <div class="page-head">
+      <div>
+        <div class="page-head__kicker">Base locale · ${esc(bytes(data.sizeBytes))}${data.tables ? ` · ${Object.keys(data.tables).length} tables` : ''}</div>
+        <h1 class="page-head__title">Collecte</h1>
+      </div>
+      ${data.running ? `
+        <div class="page-head__aside">
+          <span class="refresh-note"><span class="dot-live"></span> Collecte en cours</span>
+        </div>` : ''}
+    </div>
+    ${totalsBand(data)}
+    <div class="split split--wide-right" style="margin-top:4px">
+      <div class="split__col" style="padding-top:24px">
+        ${quotaCard(data)}
+        ${progressCard(data)}
+        ${launchCard(data)}
+      </div>
+      <div class="split__rule"></div>
+      <div class="split__col" style="padding-top:24px">
+        ${contentCard(data)}
+        ${logCard(logLines)}
+        ${scopesCard(data)}
+        ${runsCard(data)}
+      </div>
+    </div>`;
+}
+
+/**
+ * Bandeau de quatre chiffres : ce qu'on regarde d'abord en arrivant sur la
+ * page, avant meme de lire une barre.
+ */
+function totalsBand(data) {
+  const quota = data.quota;
+  const counts = data.counts;
+  if (!quota && !counts) return '';
+  const total = counts ? counts.pending + counts.done + counts.failed : 0;
+  const cells = [
+    quota && {
+      value: fmt(quota.used),
+      label: `Appels consommes / ${fmt(quota.limit)}`,
+      tone: 'is-accent',
+    },
+    total && { value: `${Math.round((counts.done / total) * 100)} %`, label: 'Taches terminees' },
+    counts && { value: fmt(counts.pending), label: 'En attente' },
+    counts && { value: fmt(counts.failed), label: 'En echec', tone: counts.failed ? 'is-live' : '' },
+  ].filter(Boolean);
+
+  return `
+    <div class="totals">
+      ${cells.map((c) => `
+        <div class="totals__cell">
+          <div class="totals__value ${c.tone || ''}">${esc(String(c.value))}</div>
+          <div class="totals__label">${esc(c.label)}</div>
+        </div>`).join('')}
+    </div>`;
 }
 
 export async function renderCollector(root) {
