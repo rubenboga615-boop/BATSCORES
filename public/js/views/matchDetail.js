@@ -99,8 +99,8 @@ function momentumBlock(fixture, events) {
   if (!series) return '';
   const share = dominanceShare(series);
   return `
-    <div class="card">
-      <div class="card__title">Momentum</div>
+    <section class="momentum">
+      <div class="section-title">Momentum</div>
       <div class="momentum__legend">
         <span class="momentum__team home">${esc(fixture.home.name)}</span>
         <span class="momentum__team away">${esc(fixture.away.name)}</span>
@@ -120,13 +120,13 @@ function momentumBlock(fixture, events) {
           <i style="background:var(--text-faint);width:${share.neutral}%"></i>
           <i class="away" style="width:${share.away}%"></i>
         </div>
-        <div class="stat__label" style="margin-top:8px">
-          Reconstruit a partir des faits de match : buts, penaltys, cartons,
-          annulations video. Le fournisseur ne publie pas les attaques minute
-          par minute, cette courbe est donc un indice de pression, pas une mesure.
-        </div>
       </div>
-    </div>`;
+      <div class="note note--sm" style="margin-top:14px">
+        Reconstruit a partir des faits de match : buts, penaltys, cartons,
+        annulations video. Le fournisseur ne publie pas les attaques minute
+        par minute, cette courbe est donc un indice de pression, pas une mesure.
+      </div>
+    </section>`;
 }
 
 function summaryPanel({ fixture, events }) {

@@ -5,7 +5,7 @@ test.describe('momentum', () => {
     await page.goto('/#/match/1001');
     await page.waitForSelector('.mh');
 
-    const bloc = page.locator('.card').filter({ hasText: 'Momentum' });
+    const bloc = page.locator('section.momentum');
     await expect(bloc).toBeVisible();
     await expect(bloc.locator('svg.momentum')).toBeVisible();
 
@@ -21,7 +21,7 @@ test.describe('momentum', () => {
   test('un match à venir n\'affiche pas de courbe inventée', async ({ page }) => {
     await page.goto('/#/match/1005');
     await page.waitForSelector('.mh');
-    await expect(page.locator('.card').filter({ hasText: 'Momentum' })).toHaveCount(0);
+    await expect(page.locator('section.momentum')).toHaveCount(0);
   });
 });
 

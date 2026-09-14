@@ -548,6 +548,12 @@ button { font-family: inherit; }
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  /* Le nom cede la place avant le compte et le lien : sans cela l'en-tete
+     deborde sur telephone et recouvre le lien « Classement ». */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .league__count {
@@ -697,7 +703,9 @@ button { font-family: inherit; }
   background: var(--ink);
   color: var(--on-ink);
   padding: 28px 32px;
-  margin: -20px -24px 0;
+  /* Pas de marge negative en haut : le lien de retour vit au-dessus du
+     bandeau, et se faisait recouvrir par lui. */
+  margin: 0 -24px;
 }
 
 .mh__league {
@@ -1603,6 +1611,10 @@ table.standings, .table-wrap table {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Quand le dernier fait tombe dans la moitie basse, la legende passe en haut
+   plutot que de se poser dessus. */
+.pitch-live__caption.is-top { bottom: auto; top: 24px; }
+
 .pitch-live__legend {
   display: flex;
   gap: 24px;
@@ -1898,7 +1910,7 @@ table.standings, .table-wrap table {
   .app-nav { display: none; }
   .app-more { display: grid; }
   .tab-bar { display: grid; }
-  .mh { margin: -16px -14px 0; padding: 18px 16px; }
+  .mh { margin: 0 -14px; padding: 18px 16px; }
   .mh__main { gap: 12px; grid-template-columns: 1fr auto 1fr; }
   .mh__team { flex-direction: column; gap: 8px; text-align: center; }
   .mh__team--home { justify-content: center; text-align: center; }
@@ -1912,6 +1924,9 @@ table.standings, .table-wrap table {
   .mh__actions button { flex: 1; text-align: center; }
   .tabs { margin: 0 -14px 18px; padding: 0 14px; }
   .tab { padding: 12px 14px 10px; font-size: 12px; }
+  .league__head { gap: 8px; }
+  .league__country { flex: 0 0 auto; font-size: 9px; letter-spacing: 0.12em; }
+  .league__count { font-size: 11px; }
   .match { grid-template-columns: 52px minmax(0, 1fr) 34px 26px; gap: 10px; }
   .match__time { font-size: 11px; }
   .match__team { font-size: 13px; }

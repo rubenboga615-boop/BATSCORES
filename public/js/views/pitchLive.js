@@ -31,13 +31,6 @@ const PLACES = [
 
 const placeOf = (event) => PLACES.find((p) => p.match(event)) || { x: 0.55, y: 0.5, label: 'Jeu' };
 
-/** Minute d'un fait, temps additionnel compris. */
-const minuteOf = (event) => {
-  const base = Number(event?.time?.elapsed);
-  if (!Number.isFinite(base)) return null;
-  return base + (Number(event?.time?.extra) || 0);
-};
-
 /**
  * Traduit un fait en coordonnees du dessin.
  * L'equipe qui recoit attaque vers la droite, la visiteuse vers la gauche :
@@ -47,7 +40,10 @@ function point(event, fixture) {
   const place = placeOf(event);
   const isHome = event.team?.id === fixture.home.id;
   const x = isHome ? place.x : 1 - place.x;
-  return { x: x * W, y: place.y * H, label: place.label, isHome };
+  // Les reperes sont ramenes a l'interieur du cadre : un marqueur centre sur
+  // la ligne de touche serait coupe en deux par le bord du dessin.
+  const clamp = (v) => Math.min(0.94, Math.max(0.06, v));
+  return { x: clamp(x) * W, y: clamp(place.y) * H, label: place.label, isHome };
 }
 
 /** Le fil des dernieres actions, du plus recent au plus ancien. */
@@ -81,7 +77,21 @@ function pressure(events, fixture) {
   const window = series.minutes.filter((p) => p.minute >= start && p.minute <= end);
   if (window.length < 2) return '';
 
-  const peak = Math.max(...window.map((p) => Math.abs(p.value)), 1);
+  // La courbe est normalisee sur le pic du match : une fenetre ou tout est
+  // proche de zero n'a rien a montrer. Dessiner dix batons de hauteur nulle
+  // laisserait croire a une mesure plate plutot qu'a une absence d'action.
+  const top = Math.max(...window.map((p) => Math.abs(p.value)));
+  if (top < 2) {
+    return `
+      <div class="rail__block">
+        <div class="rail__title" style="padding:0 0 12px">Pression sur 5 minutes</div>
+        <div style="font-size:12px;color:var(--text-faint);line-height:1.5">
+          Aucun fait de match entre la ${start}<sup>e</sup> et la ${end}<sup>e</sup> minute.
+        </div>
+      </div>`;
+  }
+
+  const peak = Math.max(top, 1);
   const bars = window.map((p) => {
     const intensity = Math.abs(p.value) / peak;
     const step = intensity > 0.75 ? 's4' : intensity > 0.5 ? 's3' : intensity > 0.25 ? 's2' : 's1';
@@ -154,7 +164,7 @@ export function pitchLivePanel({ fixture, events }) {
           </svg>
           <div class="pitch-live__side home">${esc(fixture.home.name)}</div>
           <div class="pitch-live__side away">${esc(fixture.away.name)}</div>
-          <div class="pitch-live__caption">${esc(caption)}</div>
+          <div class="pitch-live__caption${last.y > H * 0.7 ? ' is-top' : ''}">${esc(caption)}</div>
         </div>
         <div class="pitch-live__legend">
           <span><i class="ball"></i>Dernier fait</span>
