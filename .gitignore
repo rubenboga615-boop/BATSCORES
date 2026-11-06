@@ -1,20 +1,6 @@
-node_modules/
-.env
-.env.local
-*.log
-npm-debug.log*
+__pycache__/
+*.pyc
+*.ex5
+# Données de prix (souvent volumineuses) : garde-les en local
+*.csv
 .DS_Store
-.cache/
-dist/
-coverage/
-
-# Sorties des tests navigateur
-test-results/
-playwright-report/
-blob-report/
-
-# Base de donnees du collecteur
-data/
-
-# Journaux PM2
-logs/
