@@ -9,6 +9,11 @@ pour **MetaTrader 5**, testé d'abord sur des données historiques, puis sur un
 > particuliers perdent de l'argent, surtout avec le levier (CFD, forex). Ce
 > dépôt est un outil d'apprentissage, pas un conseil en investissement.
 
+## Le plan
+
+Le plan d'attaque complet, étape par étape et avec les critères pour passer à
+la suite : [`PLAN.md`](PLAN.md).
+
 ## Le parcours
 
 | Étape | Contenu | Où |
