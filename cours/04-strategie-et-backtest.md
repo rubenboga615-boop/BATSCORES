@@ -18,18 +18,26 @@ Une stratégie complète répond à 5 questions :
 Un **backtest** rejoue la stratégie sur des prix passés pour voir ce
 qu'elle aurait donné.
 
-### Récupérer de vraies données depuis MT5 (ordinateur)
+### Récupérer de vraies données (dans Termux)
 
-1. **Affichage > Symboles** (Ctrl+U), puis choisis EURUSD.
-2. Onglet **Barres** : unité de temps H1, période de 2 ans, **Demander**.
-3. **Exporter les barres** : tu obtiens un fichier `.csv`.
+```bash
+cd bot/python
+# Crypto : aucun compte nécessaire
+python telecharger.py binance BTCUSDT H1 2 btc_h1.csv
+# Forex : il faut le compte démo OANDA du module 5
+python telecharger.py oanda EUR_USD H1 2 eurusd_h1.csv
+```
+
+Le dernier nombre avant le nom du fichier est le nombre d'années
+d'historique.
 
 ### Lancer le backtester Python
 
 ```bash
 cd bot/python
-python3 backtest.py EURUSD_H1.csv --spread 0.00015
-python3 backtest.py EURUSD_H1.csv --spread 0.00015 --trades   # liste des trades
+python backtest.py eurusd_h1.csv --spread 0.00015
+python backtest.py eurusd_h1.csv --spread 0.00015 --trades   # liste des trades
+python backtest.py btc_h1.csv --spread 20                   # Bitcoin : spread en dollars
 ```
 
 Mets toujours un **spread réaliste** : sans frais, presque tout a l'air
@@ -75,8 +83,8 @@ La colonne « Ai-je respecté mes règles ? » est la plus importante au début.
    `python3 generer_donnees.py fictif.csv` puis `python3 backtest.py fictif.csv`.
    Change la graine (`python3 generer_donnees.py fictif2.csv 5000 7`) : les
    résultats changent-ils beaucoup ? Qu'en conclus-tu ?
-3. Exporte 2 ans d'EURUSD H1 depuis MT5 et fais le backtest avec un spread de
-   0,00015. Note les 5 statistiques.
+3. Télécharge 2 ans de BTCUSDT H1 (et d'EURUSD H1 quand tu auras ton compte
+   OANDA) et fais le backtest avec un spread réaliste. Note les 5 statistiques.
 4. Teste `--rapide 10 --lente 30`, `--rapide 50 --lente 200` et
    `--stop-atr 2`. Garde la meilleure, puis vérifie-la sur le dernier tiers
    des données seulement (copie la fin du fichier dans un autre `.csv`, en

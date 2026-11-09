@@ -88,6 +88,57 @@ def signal(rapide, lente, i):
     return 0
 
 
+def decision(bougies, p):
+    """Décision sur la dernière bougie CLÔTURÉE de la liste.
+
+    Renvoie (sens, distance_du_stop) : sens = +1 achat, -1 vente, 0 rien.
+    C'est la même règle que dans backtester() ; le bot en direct l'utilise.
+    """
+    if len(bougies) < max(p.mm_lente, p.periode_atr) + 1:
+        return 0, None
+    closes = [b.cloture for b in bougies]
+    rapide = moyenne_mobile(closes, p.mm_rapide)
+    lente = moyenne_mobile(closes, p.mm_lente)
+    atrs = atr(bougies, p.periode_atr)
+    i = len(bougies) - 1
+    s = signal(rapide, lente, i)
+    if s == 0 or not atrs[i]:
+        return 0, None
+    return s, p.stop_atr * atrs[i]
+
+
+def niveaux(sens, entree, distance, p):
+    """Prix du stop et de l'objectif pour une entrée donnée."""
+    return entree - sens * distance, entree + sens * distance * p.ratio_objectif
+
+
+def sortie_touchee(trade, bougie):
+    """Prix de sortie si le stop ou l'objectif est touché dans la bougie, sinon None.
+
+    Si les deux sont touchés dans la même bougie, on retient le stop
+    (hypothèse prudente : on ne sait pas lequel est arrivé en premier).
+    """
+    if trade.sens == 1:
+        stop_touche, objectif_touche = bougie.bas <= trade.stop, bougie.haut >= trade.objectif
+    else:
+        stop_touche, objectif_touche = bougie.haut >= trade.stop, bougie.bas <= trade.objectif
+    if stop_touche:
+        return trade.stop
+    if objectif_touche:
+        return trade.objectif
+    return None
+
+
+def fermer(trade, prix_sortie, date):
+    """Remplit le résultat du trade (en argent et en R)."""
+    trade.prix_sortie = prix_sortie
+    trade.date_sortie = date
+    trade.resultat = (prix_sortie - trade.prix_entree) * trade.sens * trade.quantite
+    risque = abs(trade.prix_entree - trade.stop) * trade.quantite
+    trade.r = trade.resultat / risque if risque else 0.0
+    return trade
+
+
 def backtester(bougies, p=None):
     """Rejoue la stratégie bougie par bougie, sans regarder le futur.
 
@@ -121,28 +172,22 @@ def backtester(bougies, p=None):
             if s != 0 and atrs[i - 1] and perte_jour_pct < p.perte_max_jour_pct:
                 distance = p.stop_atr * atrs[i - 1]
                 entree = b.ouverture + s * p.spread / 2
-                quantite = (capital * p.risque_pct / 100) / distance
+                stop, objectif = niveaux(s, entree, distance, p)
                 position = Trade(
                     sens=s,
                     date_entree=f"{b.date} {b.heure}",
                     prix_entree=entree,
-                    stop=entree - s * distance,
-                    objectif=entree + s * distance * p.ratio_objectif,
-                    quantite=quantite,
+                    stop=stop,
+                    objectif=objectif,
+                    quantite=(capital * p.risque_pct / 100) / distance,
                 )
 
         # 2) Sortie : stop ou objectif touché pendant la bougie.
         if position is not None:
             t = position
-            stop_touche = b.bas <= t.stop if t.sens == 1 else b.haut >= t.stop
-            objectif_touche = b.haut >= t.objectif if t.sens == 1 else b.bas <= t.objectif
-            if stop_touche or objectif_touche:
-                t.prix_sortie = t.stop if stop_touche else t.objectif
-                t.prix_sortie -= t.sens * p.spread / 2
-                t.date_sortie = f"{b.date} {b.heure}"
-                t.resultat = (t.prix_sortie - t.prix_entree) * t.sens * t.quantite
-                risque = abs(t.prix_entree - t.stop) * t.quantite
-                t.r = t.resultat / risque if risque else 0.0
+            prix = sortie_touchee(t, b)
+            if prix is not None:
+                fermer(t, prix - t.sens * p.spread / 2, f"{b.date} {b.heure}")
                 capital += t.resultat
                 res.trades.append(t)
                 position = None

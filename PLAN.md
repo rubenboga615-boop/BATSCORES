@@ -2,8 +2,8 @@
 
 ## L'objectif final
 
-> **Avoir un bot de trading qui tourne seul sur MetaTrader 5, testé sur au
-> moins 2 ans de données réelles, puis validé par 3 mois en compte démo avec
+> **Avoir un bot de trading en Python qui tourne seul (dans Termux, puis sur un
+> petit serveur), testé sur au moins 2 ans de données réelles, puis validé par 3 mois en compte démo avec
 > des résultats proches du test. Ensuite seulement, décider (ou non) de passer
 > en réel avec une petite somme.**
 
@@ -19,10 +19,10 @@ savoir **avant** de risquer de l'argent, pas après.
 
 | Phase | Quoi | Durée | Critère pour passer à la suite |
 |---|---|---|---|
-| 0 | Préparer les outils | Semaine 1 | Compte démo ouvert, MT5 installé sur ordinateur |
+| 0 | Préparer les outils | Semaine 1 | Compte démo MT5 ouvert, les tests passent dans Termux |
 | 1 | Apprendre les bases | Semaines 1 à 3 | Exercices des modules 1 à 3 faits, 20 trades manuels notés |
 | 2 | Récupérer les données et faire le premier test | Semaines 3 à 5 | Résultats de référence sur 3 marchés |
-| 3 | Mettre le bot dans MT5 | Semaines 5 à 7 | Bot compilé, résultats MT5 cohérents avec le test Python |
+| 3 | Lancer le bot : papier, puis démo OANDA | Semaines 5 à 7 | 1 semaine de papier sans incident, bot connecté au compte démo |
 | 4 | Améliorer la stratégie | Semaines 7 à 10 | Une version validée sur des données jamais utilisées |
 | 5 | Démo en continu | Mois 3 à 6 | 3 mois de démo proches du test, règles respectées |
 | 6 | Décision : réel ou pas | Mois 6 et après | Checklist du module 6 entièrement cochée |
@@ -36,13 +36,14 @@ chiffres à chaque étape.
 
 ## Phase 0 : préparer les outils (semaine 1)
 
-- [ ] Ouvrir un compte **démo** MT5 (10 000, levier 1:30 maximum) — module 0
-- [ ] Installer **MT5 sur ordinateur** (le bot ne tourne pas sur téléphone)
-- [ ] Se connecter au même compte démo sur le téléphone, pour suivre
+- [ ] Ouvrir un compte **démo** MT5 sur le téléphone (10 000, levier 1:30
+      maximum), pour t'entraîner à la main — module 0
+- [ ] Dans Termux : installer Python et git, récupérer le dépôt, lancer les
+      tests (`python -m unittest discover tests` doit finir par `OK`)
 - [ ] Sur TradingView : graphique EURUSD en H1, trouver le bouton **Replay**
 - [ ] Recopier les 5 règles de sécurité du module 0
 
-**Livrable :** une capture du compte démo dans MT5 sur ordinateur.
+**Livrable :** ce qu'affichent les tests dans Termux.
 
 ## Phase 1 : apprendre les bases (semaines 1 à 3)
 
@@ -57,8 +58,9 @@ corrige et je te dis ce qu'il faut revoir.
 
 ## Phase 2 : données et premier test (semaines 3 à 5)
 
-- [ ] Exporter **2 ans au minimum** de bougies H1 depuis MT5 pour EURUSD,
-      GBPUSD et l'or (XAUUSD) — module 4
+- [ ] Télécharger **2 ans au minimum** de bougies H1 avec `telecharger.py` :
+      BTCUSDT et ETHUSDT tout de suite, puis EUR_USD et XAU_USD (l'or) une
+      fois le compte OANDA ouvert — module 4
 - [ ] Lancer le test Python sur chaque fichier, avec un spread réaliste
 - [ ] Couper chaque fichier : les **2 premiers tiers** pour chercher, le
       **dernier tiers** mis de côté pour la vérification finale (on n'y
@@ -66,20 +68,22 @@ corrige et je te dis ce qu'il faut revoir.
 - [ ] Noter les résultats de référence : nombre de trades, taux de réussite,
       R moyen, drawdown max
 
-**Livrable :** les 3 fichiers CSV et le tableau des résultats. Je vérifie
-qu'il n'y a pas d'erreur de données.
+**Livrable :** le tableau des résultats. Je vérifie qu'il n'y a pas
+d'erreur de données.
 
-## Phase 3 : le bot dans MT5 (semaines 5 à 7)
+## Phase 3 : lancer le bot (semaines 5 à 7) — module 5
 
-- [ ] Installer et compiler `BotTendance.mq5` dans MetaEditor — module 5
-- [ ] Faire le test dans le **testeur de stratégie** sur les mêmes 2 ans
-- [ ] Comparer avec le test Python : les résultats doivent aller dans le même
-      sens (écart de 10 à 30 % acceptable)
-- [ ] Le lancer sur le compte démo quelques jours pour vérifier qu'il passe
-      bien ses ordres (onglet *Experts*)
+- [ ] Lancer le bot en **mode papier** sur BTCUSDT H1 (prix réels, argent
+      fictif, aucun compte)
+- [ ] Régler Android pour que Termux ne soit pas endormi, et vérifier qu'il
+      tourne **une semaine** sans trou dans le fichier `.log`
+- [ ] Vérifier que ses trades ressemblent à ceux du backtest sur la même
+      période
+- [ ] Ouvrir un compte **démo OANDA**, créer le jeton, lancer le bot sur
+      EUR_USD et vérifier que l'ordre apparaît chez OANDA
 
-**Livrable :** le rapport du testeur MT5 (capture ou export). Si la
-compilation échoue ou si les chiffres divergent trop, je corrige le code.
+**Livrable :** le `.log` et le journal `.csv` de la semaine. Si quelque chose
+ne marche pas, j'en corrige le code.
 
 ## Phase 4 : améliorer la stratégie (semaines 7 à 10)
 
@@ -95,11 +99,12 @@ Pistes, dans l'ordre :
 - [ ] **Vérification finale** sur le dernier tiers mis de côté, une seule fois
 
 **Livrable :** un tableau « modification → résultat ». La version gagnante
-est intégrée au bot MT5 **et** au test Python.
+est dans `strategie.py`, donc le bot et le backtest l'utilisent tous les deux.
 
 ## Phase 5 : démo en continu (mois 3 à 6)
 
-- [ ] Faire tourner le bot 24 h/24 : ordinateur allumé ou **VPS** (serveur loué)
+- [ ] Faire tourner le bot 24 h/24 sur un **petit serveur Linux** (VPS,
+      environ 4 à 5 € par mois) : je t'aide à l'installer depuis ton téléphone
 - [ ] **Ne pas toucher** au bot pendant la période, sauf bug
 - [ ] Faire un **bilan chaque mois** : résultats démo comparés au test, et journal
 - [ ] Règle d'arrêt : drawdown supérieur à 1,5 fois celui du test → on arrête

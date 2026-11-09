@@ -21,10 +21,11 @@ gens restent en démo plus longtemps, et c'est très bien.
 
 1. Commence **petit** : le plus petit capital possible et 0,5 % de risque par
    trade.
-2. Dans les paramètres du bot, passe `InpAutoriserReel` à `true`
-   (le bot refuse le réel sinon).
-3. Pour qu'il tourne en continu : un **VPS** (serveur loué, quelques euros
-   par mois ; MT5 en propose un intégré) plutôt que ton ordinateur personnel.
+2. Le bot refuse le réel par défaut. Il faut le lancer avec
+   `--reel --je-comprends-le-risque`, et un jeton OANDA du compte réel.
+3. Pour qu'il tourne en continu : un **petit serveur Linux** (VPS, environ
+   4 à 5 € par mois) plutôt que le téléphone. Le même code y tourne tel quel :
+   `git clone`, puis la même commande que dans Termux.
 4. Compare chaque mois réel / démo / backtest.
 
 ## Quand arrêter le bot

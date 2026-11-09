@@ -32,8 +32,8 @@ Exemple : capital 10 000 €, risque 1 % = 100 €, stop à 20 pips, EURUSD
 **Le stop se place d'abord** (là où l'idée du trade devient fausse), et la
 taille de position en découle. Jamais l'inverse.
 
-Le bot fait exactement ce calcul dans la fonction `CalculerLots`
-(`bot/mql5/BotTendance.mq5`).
+Le bot fait exactement ce calcul au moment d'ouvrir un trade (`ouvrir` dans
+`bot/python/courtiers.py`).
 
 ## L'espérance : pourquoi on peut gagner en perdant souvent
 

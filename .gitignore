@@ -4,3 +4,4 @@ __pycache__/
 # Données de prix (souvent volumineuses) : garde-les en local
 *.csv
 .DS_Store
+donnees/

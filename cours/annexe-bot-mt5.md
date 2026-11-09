@@ -1,4 +1,8 @@
-# Module 5 : le bot dans MetaTrader 5
+# Annexe : le bot dans MetaTrader 5 (ordinateur ou VPS Windows)
+
+> Cette annexe ne sert que si tu as un jour accès à un ordinateur Windows ou
+> à un VPS Windows. Sans ordinateur, le bot à utiliser est celui du
+> [module 5](05-le-bot-termux.md), qui tourne dans Termux.
 
 Le bot est le fichier [`bot/mql5/BotTendance.mq5`](../bot/mql5/BotTendance.mq5).
 Dans MT5, un bot s'appelle un **Expert Advisor (EA)**. Il est écrit en

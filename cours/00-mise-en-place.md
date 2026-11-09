@@ -3,12 +3,13 @@
 Objectif : avoir tes outils prêts et un **compte démo** (argent fictif) pour
 t'entraîner sans rien risquer.
 
-## Les deux applis que tu as
+## Les trois applis que tu as
 
 | Appli | À quoi elle sert | Usage dans ce cours |
 |---|---|---|
 | **TradingView** | Analyser les graphiques (le meilleur outil pour ça) | Lire les bougies, tracer, tester des idées à la main avec le **mode Replay** |
-| **MetaTrader 5** | Passer des ordres chez un courtier, faire tourner des bots | Compte démo, et le **bot** (Expert Advisor) |
+| **MetaTrader 5** | Passer des ordres chez un courtier | Compte démo pour trader **à la main** et t'entraîner |
+| **Termux** | Un terminal Linux sur Android | Faire tourner le **testeur** et le **bot** en Python |
 
 ## 1. Ouvrir un compte démo MT5
 
@@ -19,10 +20,28 @@ Sur téléphone :
 3. Choisis **Ouvrir un compte démo**, avec **10 000** de capital et un levier
    **1:30 maximum** (c'est la limite légale en Europe pour le forex).
 
-> Le bot (Expert Advisor) ne tourne **que sur MT5 pour ordinateur** (Windows,
-> ou Mac avec la version officielle). Sur téléphone, tu peux trader à la main
-> et suivre le bot, mais pas le lancer. Pour qu'il tourne 24 h/24, il faudra un
-> ordinateur allumé ou un VPS (un serveur loué) ; on en parle au module 6.
+> Les bots MT5 (Expert Advisors) ne tournent que sur MT5 pour ordinateur.
+> Comme tu n'en as pas, notre bot est écrit en **Python** et tourne dans
+> **Termux**. Il passe ses ordres par internet, directement chez le courtier
+> (module 5). MT5 sur le téléphone sert à t'entraîner à la main.
+
+## 1 bis. Préparer Termux
+
+```bash
+pkg update && pkg install python git
+git clone https://github.com/rubenboga615-boop/batscores
+cd batscores
+git checkout claude/training-8ekbq5
+cd bot/python
+python -m unittest discover tests     # doit finir par "OK"
+```
+
+Si le dépôt est privé, `git clone` demande un identifiant : utilise ton nom
+GitHub et un **jeton** (GitHub > Settings > Developer settings > Personal
+access tokens) à la place du mot de passe.
+
+Pour récupérer mes mises à jour plus tard : `git pull` dans le dossier
+`batscores`.
 
 ## 2. Préparer TradingView
 
